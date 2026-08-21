@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package lottery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/lihai1/stat-tree-server/pkg/gen;lotteryv1";
+
+// Java package for generated stubs.
+option java_package = "com.statistiloto.lottery.v1";
+option java_multiple_files = true;
+
+// LotteryService is the contract between the Java BFF and the Go
+// lottery-stats-server. The Go service owns the tree-based analysis engine
+// (internal/lottery-tree) and the lottery_results store. It is stateless
+// beyond the historical draws table: no user data, no saved forms.
+service LotteryService {
+  // HealthCheck returns the health status of the service.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
+    option (google.api.http) = {
+      get: "/health"
+    };
+  }
+
+  // GenerateForm generates lottery number combinations based on
+  // historical-draw patterns over an optional date window.
+  rpc GenerateForm(GenerateFormRequest) returns (GenerateFormResponse) {
+    option (google.api.http) = {
+      post: "/api/generate/form"
+      body: "*"
+    };
+  }
+
+  // GetStatistics calculates frequent number pairs/groups over a date window.
+  rpc GetStatistics(GetStatisticsRequest) returns (GetStatisticsResponse) {
+    option (google.api.http) = {
+      post: "/api/generate/pares"
+      body: "*"
+    };
+  }
+
+  // Analyze evaluates user-selected numbers against historical winning draws.
+  rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse) {
+    option (google.api.http) = {
+      post: "/api/generate/analyze"
+      body: "*"
+    };
+  }
+}
+
+// Strength selects whether strong-ball statistics are used.
+enum Strength {
+  STRENGTH_UNSPECIFIED = 0;
+  WEAK = 1;
+  STRONG = 2;
+}
+
+// DateWindow is an optional historical-draw window. If both bounds are unset
+// the service uses the full archive.
+message DateWindow {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+}
+
+// GenerateFormRequest mirrors the original FormCalculations model.
+message GenerateFormRequest {
+  // howMany combinations to generate.
+  int32 how_many = 1;
+  // Lottery form type/variant (matches original `type` field).
+  int32 form_type = 2;
+  // Numbers the user wants included in every generated form ("willBe").
+  repeated int32 will_be = 3;
+  // Optional historical window. Unset = full archive.
+  DateWindow window = 4;
+  // Strength mode for statistics-aware generation.
+  Strength strength = 5;
+}
+
+// NumberSet is one generated combination (regular numbers + optional strong).
+message NumberSet {
+  repeated int32 numbers = 1;
+  optional int32 strong = 2;
+}
+
+// GenerateFormResponse is a list of generated combinations.
+message GenerateFormResponse {
+  repeated NumberSet forms = 1;
+}
+
+// GetStatisticsRequest mirrors the original statsCalculations model.
+message GetStatisticsRequest {
+  // how many pairs/groups to compute.
+  int32 how_many = 1;
+  // Lottery form type/variant.
+  int32 form_type = 2;
+  // Optional historical window.
+  DateWindow window = 3;
+  // Strength mode (strong/weak pair statistics).
+  Strength strength = 4;
+}
+
+// Pair is a frequent number group with its occurrence count.
+message Pair {
+  repeated int32 numbers = 1;
+  int32 count = 2;
+}
+
+// GetStatisticsResponse is the list of frequent pairs/groups.
+message GetStatisticsResponse {
+  repeated Pair pairs = 1;
+}
+
+// AnalyzeRequest mirrors the original FormAnalyzeCalculations model.
+message AnalyzeRequest {
+  // The user's selected numbers to evaluate.
+  repeated int32 form = 1;
+  // Optional historical window.
+  DateWindow window = 2;
+}
+
+// AnalyzeResponse is the analysis of the user's form against history.
+message AnalyzeResponse {
+  // Matched historical draws (draw id + how many numbers matched).
+  repeated FormMatch matches = 1;
+  // Summary statistics for the submitted form.
+  map<int32, int32> frequency = 2;
+}
+
+// FormMatch is one historical draw that overlaps the submitted form.
+message FormMatch {
+  string draw_id = 1;
+  string draw_date = 2;
+  repeated int32 matched_numbers = 3;
+  int32 match_count = 4;
+}
+
+// HealthCheckRequest is an empty request for health check.
+message HealthCheckRequest {}
+
+// HealthCheckResponse contains the health status of the service.
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+  int32 draws_loaded = 3;
+}

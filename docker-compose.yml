@@ -1,0 +1,191 @@
+name: statistiloto-new
+
+# ───────────────────────────────────────────────────────────────────
+# Statistiloto-New — full local development / deployment stack.
+#
+# Services:
+#   db        — PostgreSQL (shared, schemas: keycloak / app / lottery)
+#   auth      — Keycloak (OIDC, JWT issuance)
+#   lottery   — Go lottery-stats-server (algorithm + scraper, gRPC + REST)
+#   server    — Java Spring Boot BFF (UI-facing REST, gRPC client)
+#   ui        — Angular PWA (Nginx static)
+#   proxy     — Traefik (TLS, routing, rate limiting, ForwardAuth)
+#
+# Only the proxy exposes ports externally (80/443). All other services
+# communicate over the private `statistiloto-net` network.
+# ───────────────────────────────────────────────────────────────────
+
+services:
+  # ── Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: statistiloto-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-statistiloto}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init-schemas.sh:/docker-entrypoint-initdb.d/01-init-schemas.sh:ro
+      - ./db/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+      - ./db/lotto.data:/seed/lotto.data:ro
+    networks:
+      - statistiloto-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Keycloak (Auth) ─────────────────────────────────────────────
+  auth:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: statistiloto-auth
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-relative-path=/auth", "--features=hostname:v1"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-statistiloto}?currentSchema=keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-postgres}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME_URL: ${KEYCLOAK_PUBLIC_URL:-https://localhost/auth}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: forwarded
+    volumes:
+      - ./auth/realm-statistiloto.json:/opt/keycloak/data/import/realm-statistiloto.json:ro
+    networks:
+      - statistiloto-net
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  # ── Go lottery-stats-server ─────────────────────────────────────
+  lottery:
+    build:
+      context: ./lottery-stats-server
+      dockerfile: Dockerfile
+    container_name: statistiloto-lottery
+    restart: unless-stopped
+    environment:
+      SERVER_HOST: 0.0.0.0
+      GATEWAY_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-statistiloto}
+      DB_SSLMODE: disable
+      DB_SCHEMA: lottery
+      AUTH_ENABLED: "true"
+      KEYCLOAK_JWKS_URL: http://auth:8080/auth/realms/statistiloto/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER: http://auth:8080/auth/realms/statistiloto
+      KEYCLOAK_AUDIENCE: account
+      LOTTERY_SCRAPER_CRON: "0 3 * * *"
+      LOTTERY_SEED_ON_BOOT: "true"
+    networks:
+      - statistiloto-net
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── Java Spring Boot BFF ────────────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: statistiloto-server
+    restart: unless-stopped
+    environment:
+      SERVER_HTTP_PORT: 8082
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-statistiloto}
+      KEYCLOAK_ISSUER: http://auth:8080/auth/realms/statistiloto
+      LOTTERY_GRPC_HOST: lottery
+      LOTTERY_GRPC_PORT: 9090
+    networks:
+      - statistiloto-net
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      lottery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=statistiloto-new_statistiloto-net"
+      - "traefik.http.routers.server.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.server.entryPoints=websecure"
+      - "traefik.http.routers.server.tls=true"
+      - "traefik.http.routers.server.middlewares=edge-jwt,rl-api,secure-headers"
+      - "traefik.http.services.server.loadbalancer.server.port=8082"
+
+  # ── Angular PWA (Nginx) ─────────────────────────────────────────
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: statistiloto-ui
+    restart: unless-stopped
+    networks:
+      - statistiloto-net
+    # depends_on:
+    #   server:
+    #     condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Traefik proxy ───────────────────────────────────────────────
+  proxy:
+    image: traefik:v3.2
+    container_name: statistiloto-proxy
+    restart: unless-stopped
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "80:80"
+    volumes:
+      - ./proxy/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./proxy/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - statistiloto-net
+    depends_on:
+      - auth
+      - server
+      - ui
+
+networks:
+  statistiloto-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

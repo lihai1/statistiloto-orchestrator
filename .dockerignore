@@ -1,0 +1,45 @@
+# Build context for `server` (context: .) and `ui` (context: .) is the
+# repo root.  This file trims everything neither service needs, so Docker
+# doesn't ship the entire repo as context on every build.
+#
+# server build needs: proto/, server/
+# ui build needs:      ui/
+# lottery build uses context ./lottery-stats-server (not affected here).
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE / editor
+.idea
+.vscode
+*.swp
+*.swo
+
+# Docs and repo metadata
+README.md
+AGENTS.md
+agents.md
+docs/
+
+# Other services — not needed by server or ui image builds
+auth/
+db/
+proxy/
+lottery-stats-server/
+
+# Docker compose itself
+docker-compose.yml
+*.dockerignore
+
+# Stale build artifacts and caches (built inside the container)
+**/build/
+**/.gradle/
+**/out/
+**/target/
+**/node_modules/
+**/dist/
+**/.angular/
+**/coverage/
+**/*.log

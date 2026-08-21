@@ -1,0 +1,1 @@
+rootProject.name = "statistiloto-server"

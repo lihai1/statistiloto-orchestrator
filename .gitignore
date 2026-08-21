@@ -1,0 +1,44 @@
+# Env / secrets
+.env
+.env.local
+*.secret
+auth/realm-statistiloto-local.json
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.iml
+.serena/
+
+# Original/backup files
+*.orig
+*.bak
+
+# Java / Gradle
+server/.gradle/
+server/build/
+server/out/
+server/bin/
+server/.classpath
+server/.project
+server/.settings/
+
+# Go
+lottery-stats-server/bin/
+*.test
+*.out
+coverage.txt
+
+# Angular / Node
+ui/node_modules/
+ui/dist/
+ui/.angular/
+ui/coverage/
+ui/playwright-report/
+ui/test-results/
+
+# Docker
+data/
+postgres-data/
+proxy/certs/
