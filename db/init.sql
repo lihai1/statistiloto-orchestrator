@@ -12,22 +12,28 @@ GRANT ALL ON SCHEMA app TO statistiloto;
 GRANT ALL ON SCHEMA lottery TO statistiloto;
 
 -- Lottery results table — owned by the Go service.
+-- Schema matches the Go repository/models.LotteryResult contract:
+--   id, draw_number, draw_date, numbers, strong, lottery_type,
+--   created_at, updated_at. The repository's ON CONFLICT (draw_number)
+--   upsert depends on the unique constraint below.
 CREATE TABLE IF NOT EXISTS lottery.lottery_results (
     id           SERIAL PRIMARY KEY,
-    draw_date    DATE NOT NULL UNIQUE,
+    draw_number  INTEGER NOT NULL UNIQUE,
+    draw_date    TIMESTAMPTZ NOT NULL,
     numbers      INTEGER[] NOT NULL,
-    will_be      INTEGER[] NOT NULL DEFAULT '{}',
-    form_type    INTEGER NOT NULL DEFAULT 1,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    strong       INTEGER NOT NULL DEFAULT 0,
+    lottery_type TEXT NOT NULL DEFAULT 'lotto',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Staging table for the raw lotto.data CSV import.
--- Format: draw_id, draw_date(DD/MM/YY), n1, n2, n3, n4, n5, n6, will_be, extra1, extra2
+-- Format: draw_id, draw_date(DD/MM/YY), n1, n2, n3, n4, n5, n6, strong, extra1, extra2
 CREATE TEMP TABLE lotto_staging (
     draw_id    TEXT,
     draw_date  TEXT,
     n1 INTEGER, n2 INTEGER, n3 INTEGER, n4 INTEGER, n5 INTEGER, n6 INTEGER,
-    will_be    INTEGER,
+    strong     INTEGER,
     extra1     INTEGER,
     extra2     INTEGER
 );
@@ -36,15 +42,21 @@ CREATE TEMP TABLE lotto_staging (
 \copy lotto_staging FROM '/seed/lotto.data' WITH (FORMAT csv, DELIMITER ',', HEADER true, NULL '')
 
 -- Transform into lottery_results. Date format is DD/MM/YY.
-INSERT INTO lottery.lottery_results (draw_date, numbers, will_be, form_type)
+INSERT INTO lottery.lottery_results (draw_number, draw_date, numbers, strong, lottery_type)
 SELECT
-    TO_DATE(draw_date, 'DD/MM/YY') AS draw_date,
+    CAST(draw_id AS INTEGER) AS draw_number,
+    TO_TIMESTAMP(draw_date, 'DD/MM/YY') AS draw_date,
     ARRAY[n1, n2, n3, n4, n5, n6] AS numbers,
-    CASE WHEN will_be > 0 THEN ARRAY[will_be] ELSE ARRAY[]::INTEGER[] END AS will_be,
-    1 AS form_type
+    COALESCE(strong, 0) AS strong,
+    'lotto' AS lottery_type
 FROM lotto_staging
-WHERE draw_date IS NOT NULL
-ON CONFLICT (draw_date) DO NOTHING;
+WHERE draw_date IS NOT NULL AND draw_id ~ '^[0-9]+$'
+ON CONFLICT (draw_number) DO UPDATE
+SET draw_date    = EXCLUDED.draw_date,
+    numbers      = EXCLUDED.numbers,
+    strong       = EXCLUDED.strong,
+    lottery_type = EXCLUDED.lottery_type,
+    updated_at   = NOW();
 
 -- App schema tables — owned by the Java BFF (Flyway manages migrations).
 -- Flyway will create user_profiles and saved_numbers tables.

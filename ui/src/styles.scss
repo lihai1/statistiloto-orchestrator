@@ -9,6 +9,10 @@
   --border: #e0e0e0;
   --danger: #d32f2f;
   --success: #388e3c;
+  /* Ball colors — modern adaptation of the legacy red/blue balls */
+  --ball-regular: #e53935;
+  --ball-strong: #1976d2;
+  --ball-muted: #eceff1;
 }
 
 * { box-sizing: border-box; }

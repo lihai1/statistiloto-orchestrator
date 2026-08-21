@@ -1,80 +1,122 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api/api.service';
-import { LotteryResultResponse, StatisticsRequest } from '../../shared/models/lottery.models';
+import { LanguageService } from '../../core/i18n/language.service';
+import { ArchiveWindowService } from '../../shared/services/archive-window.service';
+import { ToastService } from '../../shared/components/toast/toast.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
+import { ArchiveWindowComponent } from '../../shared/components/archive-window/archive-window.component';
+import {
+  NumberSetListComponent,
+  NumberSetItem,
+} from '../../shared/components/number-set-list/number-set-list.component';
+import {
+  LotteryResultResponse,
+  StatisticsRequest,
+} from '../../shared/models/lottery.models';
 
 @Component({
   selector: 'app-statistics',
   standalone: true,
-  imports: [FormsModule],
+  imports: [
+    FormsModule,
+    TranslatePipe,
+    ArchiveWindowComponent,
+    NumberSetListComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card">
-      <h2>Statistics</h2>
-      <p>Calculate frequent pairs and groups from historical draws.</p>
+      <h2>{{ 'stats.title' | translate }}</h2>
+      <p>{{ 'stats.subtitle' | translate }}</p>
 
-      <div class="form-row">
-        <label for="howMany">How many pairs</label>
-        <input id="howMany" type="number" min="1" max="50" [(ngModel)]="howMany" />
+      <app-archive-window />
+
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="groupSize">{{ 'stats.groupSize' | translate }}</label>
+          <select id="groupSize" [(ngModel)]="groupSize">
+            @for (g of groupSizes; track g) {
+              <option [ngValue]="g">{{ g }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="howMany">{{ 'stats.howMany' | translate }}</label>
+          <input id="howMany" type="number" min="1" max="50" [(ngModel)]="howMany" />
+        </div>
+
+        <div class="form-row">
+          <label for="strength">{{ 'stats.strength' | translate }}</label>
+          <select id="strength" [(ngModel)]="strength">
+            <option value="strong">{{ 'generate.strength.strong' | translate }}</option>
+            <option value="weak">{{ 'generate.strength.weak' | translate }}</option>
+          </select>
+        </div>
       </div>
 
-      <div class="form-row">
-        <label for="strength">Strength</label>
-        <select id="strength" [(ngModel)]="strength">
-          <option value="strong">Strong</option>
-          <option value="weak">Weak</option>
-        </select>
-      </div>
+      <button class="primary" (click)="load()">{{ 'stats.button' | translate }}</button>
 
-      <button class="primary" (click)="load()">Calculate</button>
-
-      @if (loading()) { <p>Calculating...</p> }
-      @if (error()) { <p class="error">{{ error() }}</p> }
       @if (result()?.pairs?.length) {
         <div class="results">
-          <h3>Frequent Pairs</h3>
-          @for (pair of result()!.pairs; track pair) {
-            <div class="pair">
-              <span class="numbers">{{ pair.numbers.join(', ') }}</span>
-              <span class="count">×{{ pair.count }}</span>
-            </div>
-          }
+          <h3>{{ 'stats.results' | translate }}</h3>
+          <app-number-set-list
+            [items]="pairItems()"
+            [showAnalyze]="false"
+            [showSave]="false"
+            [showDelete]="false"
+          />
         </div>
       }
     </section>
   `,
   styles: [`
-    .form-row { margin: 12px 0; display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
+    .form-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+    .form-row { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+    .form-row label { font-size: 13px; color: var(--text-secondary); }
     input, select { padding: 8px; border: 1px solid var(--border); border-radius: 4px; }
-    .pair {
-      display: flex; justify-content: space-between; padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .numbers { font-weight: 600; }
-    .count { color: var(--text-secondary); }
+    .results { margin-top: 24px; }
   `],
 })
 export class StatisticsComponent {
   private api = inject(ApiService);
+  private toast = inject(ToastService);
+  protected lang = inject(LanguageService);
+  private archive = inject(ArchiveWindowService);
 
+  groupSizes = [1, 2, 3, 4, 5, 6];
+  groupSize = 2;
   howMany = 10;
   strength: 'strong' | 'weak' = 'strong';
-  loading = signal(false);
-  error = signal<string | null>(null);
+
   result = signal<LotteryResultResponse | null>(null);
+  pairItems = signal<NumberSetItem[]>([]);
 
   load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    const req: StatisticsRequest = { howMany: this.howMany, strength: this.strength };
+    this.toast.showLoading();
+    const req: StatisticsRequest = {
+      howMany: this.howMany,
+      formType: this.groupSize,
+      from: this.archive.from(),
+      to: this.archive.to(),
+      strength: this.strength,
+    };
+
     this.api.getStatistics(req).subscribe({
       next: (res) => {
         this.result.set(res);
-        this.loading.set(false);
+        this.pairItems.set(
+          (res.pairs ?? []).map((p) => ({
+            numbers: p.numbers,
+            count: p.count,
+          })),
+        );
+        this.toast.hideLoading();
       },
       error: (err) => {
-        this.error.set(err.message ?? 'Statistics failed');
-        this.loading.set(false);
+        this.toast.hideLoading();
+        this.toast.error(err.message ?? this.lang.t('common.connectionError'));
       },
     });
   }

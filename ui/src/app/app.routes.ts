@@ -18,6 +18,13 @@ export const routes: Routes = [
     title: 'Generate Forms',
   },
   {
+    path: 'lucky',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/lucky/lucky.component').then((m) => m.LuckyComponent),
+    title: 'Lucky Numbers',
+  },
+  {
     path: 'statistics',
     canActivate: [authGuard],
     loadComponent: () =>

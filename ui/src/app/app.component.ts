@@ -1,29 +1,40 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
+import { LanguageService } from './core/i18n/language.service';
+import { TranslatePipe } from './shared/pipes/translate.pipe';
+import { ToastOverlayComponent } from './shared/components/toast/toast-overlay.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    TranslatePipe,
+    ToastOverlayComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="app-header">
       <nav class="container">
-        <a routerLink="/" class="brand">Statistiloto</a>
+        <a routerLink="/" class="brand">{{ 'app.title' | translate }}</a>
         <ul class="nav-links">
-          <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Home</a></li>
-          <li><a routerLink="/generate" routerLinkActive="active">Generate</a></li>
-          <li><a routerLink="/statistics" routerLinkActive="active">Statistics</a></li>
-          <li><a routerLink="/analyze" routerLinkActive="active">Analyze</a></li>
-          <li><a routerLink="/saved" routerLinkActive="active">Saved</a></li>
+          <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">{{ 'nav.home' | translate }}</a></li>
+          <li><a routerLink="/generate" routerLinkActive="active">{{ 'nav.generate' | translate }}</a></li>
+          <li><a routerLink="/lucky" routerLinkActive="active">{{ 'nav.lucky' | translate }}</a></li>
+          <li><a routerLink="/statistics" routerLinkActive="active">{{ 'nav.statistics' | translate }}</a></li>
+          <li><a routerLink="/analyze" routerLinkActive="active">{{ 'nav.analyze' | translate }}</a></li>
+          <li><a routerLink="/saved" routerLinkActive="active">{{ 'nav.saved' | translate }}</a></li>
         </ul>
         <div class="auth-actions">
+          <button class="lang-toggle" (click)="lang.toggle()">{{ 'lang.toggle' | translate }}</button>
           @if (auth.isAuthenticated()) {
             <span class="user-name">{{ auth.username() }}</span>
-            <button class="secondary" (click)="auth.logout()">Logout</button>
+            <button class="secondary" (click)="auth.logout()">{{ 'auth.logout' | translate }}</button>
           } @else {
-            <button class="primary" (click)="auth.login()">Login</button>
+            <button class="primary" (click)="auth.login()">{{ 'auth.login' | translate }}</button>
           }
         </div>
       </nav>
@@ -31,6 +42,7 @@ import { AuthService } from './core/auth/auth.service';
     <main class="container">
       <router-outlet />
     </main>
+    <app-toast-overlay />
   `,
   styles: [`
     .app-header {
@@ -63,8 +75,17 @@ import { AuthService } from './core/auth/auth.service';
     .nav-links a.active { color: var(--primary); font-weight: 600; }
     .auth-actions { display: flex; align-items: center; gap: 12px; }
     .user-name { font-size: 14px; color: var(--text-secondary); }
+    .lang-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 700;
+      padding: 4px 10px;
+      font-size: 13px;
+    }
   `],
 })
 export class AppComponent {
   protected auth = inject(AuthService);
+  protected lang = inject(LanguageService);
 }

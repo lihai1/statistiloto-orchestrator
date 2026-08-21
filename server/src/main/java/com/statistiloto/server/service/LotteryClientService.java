@@ -46,7 +46,13 @@ public class LotteryClientService {
 
         var resp = stub.generateForm(protoReq);
         List<List<Integer>> forms = resp.getFormsList().stream()
-            .map(ns -> ns.getNumbersList().stream().map(Integer::valueOf).collect(Collectors.toList()))
+            .map(ns -> {
+                var nums = ns.getNumbersList().stream().map(Integer::valueOf).collect(Collectors.toList());
+                if (ns.hasStrong() && ns.getStrong() > 0) {
+                    nums.add(ns.getStrong());
+                }
+                return nums;
+            })
             .toList();
 
         return new LotteryResultResponse(forms, null, null, null);

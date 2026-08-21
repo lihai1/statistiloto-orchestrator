@@ -1,3 +1,12 @@
+// Category constants matching the legacy NumbersCategory values.
+export const NumbersCategory = {
+  LUCKY: 'lucky',
+  USER_GENERATED: 'user-generated',
+  GROUP_CALCULATED: 'group-calculated',
+} as const;
+
+export type NumbersCategoryType = (typeof NumbersCategory)[keyof typeof NumbersCategory];
+
 export interface GenerateFormRequest {
   howMany: number;
   formType?: number;

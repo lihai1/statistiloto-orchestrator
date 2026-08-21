@@ -21,9 +21,9 @@ http:
     # Per-IP rate limiting. Stricter on auth, moderate on compute endpoints.
     rl-auth:
       rateLimit:
-        average: 10
+        average: 100
         period: 1m
-        burst: 20
+        burst: 200
         sourceCriterion:
           ipStrategy:
             depth: 0

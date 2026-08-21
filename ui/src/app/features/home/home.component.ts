@@ -1,24 +1,27 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero card">
-      <h1>Statistiloto</h1>
-      <p>Israeli lottery analysis and number generation based on historical patterns.</p>
+      <h1>{{ 'home.title' | translate }}</h1>
+      <p>{{ 'home.subtitle' | translate }}</p>
       @if (!auth.isAuthenticated()) {
-        <button class="primary" (click)="auth.login()">Get Started</button>
+        <button class="primary" (click)="auth.login()">{{ 'home.cta' | translate }}</button>
       } @else {
         <div class="actions">
-          <a routerLink="/generate" class="action-link">Generate Forms</a>
-          <a routerLink="/statistics" class="action-link">View Statistics</a>
-          <a routerLink="/analyze" class="action-link">Analyze Numbers</a>
-          <a routerLink="/saved" class="action-link">My Saved Numbers</a>
+          <a routerLink="/generate" class="action-link">{{ 'home.action.generate' | translate }}</a>
+          <a routerLink="/lucky" class="action-link">{{ 'home.action.lucky' | translate }}</a>
+          <a routerLink="/statistics" class="action-link">{{ 'home.action.statistics' | translate }}</a>
+          <a routerLink="/analyze" class="action-link">{{ 'home.action.analyze' | translate }}</a>
+          <a routerLink="/saved" class="action-link">{{ 'home.action.saved' | translate }}</a>
         </div>
       }
     </section>
@@ -39,4 +42,5 @@ import { AuthService } from '../../core/auth/auth.service';
 })
 export class HomeComponent {
   protected auth = inject(AuthService);
+  protected lang = inject(LanguageService);
 }

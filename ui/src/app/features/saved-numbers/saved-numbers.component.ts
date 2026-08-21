@@ -1,59 +1,121 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { ApiService } from '../../core/api/api.service';
-import { SavedNumbersResponse } from '../../shared/models/lottery.models';
+import { LanguageService } from '../../core/i18n/language.service';
+import { ToastService } from '../../shared/components/toast/toast.service';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
+import {
+  NumberSetListComponent,
+  NumberSetItem,
+} from '../../shared/components/number-set-list/number-set-list.component';
+import {
+  NumbersCategory,
+  SavedNumbersResponse,
+} from '../../shared/models/lottery.models';
 
 @Component({
   selector: 'app-saved-numbers',
   standalone: true,
-  imports: [],
+  imports: [TranslatePipe, NumberSetListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card">
-      <h2>Saved Numbers</h2>
-      <p>Your saved lottery number sets.</p>
+      <h2>{{ 'saved.title' | translate }}</h2>
+      <p>{{ 'saved.subtitle' | translate }}</p>
 
-      @if (loading()) { <p>Loading...</p> }
-      @if (error()) { <p class="error">{{ error() }}</p> }
-
-      @if (numbers().length === 0 && !loading()) {
-        <p class="empty">No saved numbers yet. Generate a form and save it!</p>
+      @if (loading()) {
+        <p>{{ 'saved.loading' | translate }}</p>
+      }
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
       }
 
-      @for (item of numbers(); track item.id) {
-        <div class="saved-item">
-          <div class="info">
-            <span class="category">{{ item.category }}</span>
-            <span class="nums">{{ item.numbers.join(', ') }}</span>
-            @if (item.willBe?.length) {
-              <span class="will-be">+ {{ item.willBe!.join(', ') }}</span>
-            }
-          </div>
-          <button class="secondary" (click)="delete(item.id)">Delete</button>
+      @if (allEmpty() && !loading()) {
+        <p class="empty">{{ 'saved.empty' | translate }}</p>
+      }
+
+      @if (forms().length > 0) {
+        <div class="group">
+          <h3 class="group-header">
+            {{ 'saved.forms' | translate }} <span class="count">{{ forms().length }}</span>
+          </h3>
+          <app-number-set-list
+            [items]="forms()"
+            [showAnalyze]="true"
+            [showSave]="false"
+            [showDelete]="true"
+            (analyze)="onAnalyze($event)"
+            (delete)="onDelete($event)"
+          />
+        </div>
+      }
+
+      @if (groups().length > 0) {
+        <div class="group">
+          <h3 class="group-header">
+            {{ 'saved.groups' | translate }} <span class="count">{{ groups().length }}</span>
+          </h3>
+          <app-number-set-list
+            [items]="groups()"
+            [showAnalyze]="true"
+            [showSave]="false"
+            [showDelete]="true"
+            (analyze)="onAnalyze($event)"
+            (delete)="onDelete($event)"
+          />
+        </div>
+      }
+
+      @if (lucky().length > 0) {
+        <div class="group">
+          <h3 class="group-header">
+            {{ 'saved.lucky' | translate }} <span class="count">{{ lucky().length }}</span>
+          </h3>
+          <app-number-set-list
+            [items]="lucky()"
+            [showAnalyze]="false"
+            [showSave]="false"
+            [showDelete]="true"
+            (delete)="onDelete($event)"
+          />
         </div>
       }
     </section>
   `,
   styles: [`
-    .saved-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
+    .group { margin-top: 20px; }
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      margin: 0 0 12px;
     }
-    .info { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .category {
-      background: #e3f2fd; padding: 2px 8px; border-radius: 4px;
-      font-size: 12px; font-weight: 600;
+    .count {
+      background: var(--primary);
+      color: #fff;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 13px;
     }
-    .nums { font-weight: 600; }
-    .will-be { color: var(--text-secondary); }
     .empty { color: var(--text-secondary); }
   `],
 })
 export class SavedNumbersComponent {
   private api = inject(ApiService);
+  private toast = inject(ToastService);
+  protected lang = inject(LanguageService);
+  private router = inject(Router);
 
   loading = signal(false);
   error = signal<string | null>(null);
-  numbers = signal<SavedNumbersResponse[]>([]);
+  forms = signal<NumberSetItem[]>([]);
+  groups = signal<NumberSetItem[]>([]);
+  lucky = signal<NumberSetItem[]>([]);
+
+  allEmpty() {
+    return this.forms().length === 0 && this.groups().length === 0 && this.lucky().length === 0;
+  }
 
   constructor() {
     this.load();
@@ -63,20 +125,55 @@ export class SavedNumbersComponent {
     this.loading.set(true);
     this.api.getSavedNumbers().subscribe({
       next: (res) => {
-        this.numbers.set(res);
+        const forms = res
+          .filter((s) => s.category === NumbersCategory.USER_GENERATED)
+          .map((s) => this.toItem(s));
+        const groups = res
+          .filter((s) => s.category === NumbersCategory.GROUP_CALCULATED)
+          .map((s) => this.toItem(s));
+        const lucky = res
+          .filter((s) => s.category === NumbersCategory.LUCKY)
+          .map((s) => this.toItem(s));
+        this.forms.set(forms);
+        this.groups.set(groups);
+        this.lucky.set(lucky);
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err.message ?? 'Failed to load saved numbers');
+        this.error.set(err.message ?? this.lang.t('common.error'));
         this.loading.set(false);
       },
     });
   }
 
-  delete(id: number): void {
-    this.api.deleteNumbers(id).subscribe({
-      next: () => this.numbers.update((list) => list.filter((n) => n.id !== id)),
-      error: (err) => this.error.set(err.message ?? 'Failed to delete'),
+  onAnalyze(item: NumberSetItem): void {
+    // Navigate to analyze page with the numbers pre-filled via query params.
+    this.router.navigate(['/analyze'], {
+      queryParams: { form: item.numbers.join(',') },
     });
+  }
+
+  onDelete(item: NumberSetItem): void {
+    if (item.id == null) return;
+    this.api.deleteNumbers(item.id).subscribe({
+      next: () => {
+        this.forms.update((l) => l.filter((s) => s.id !== item.id));
+        this.groups.update((l) => l.filter((s) => s.id !== item.id));
+        this.lucky.update((l) => l.filter((s) => s.id !== item.id));
+      },
+      error: (err) => this.toast.error(err.message ?? this.lang.t('common.error')),
+    });
+  }
+
+  private toItem(s: SavedNumbersResponse): NumberSetItem {
+    return {
+      id: s.id,
+      numbers: s.numbers,
+      strong: s.willBe,
+      category: s.category,
+      dateFrom: s.dateFrom,
+      dateTo: s.dateTo,
+      createdAt: s.createdAt,
+    };
   }
 }
