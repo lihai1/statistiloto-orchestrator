@@ -16,19 +16,34 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
-
   "roles": {
     "realm": [
-      { "name": "USER", "description": "Standard Statistiloto user", "composite": false, "clientRole": false, "containerId": "statistiloto" },
-      { "name": "ADMIN", "description": "Statistiloto administrator", "composite": false, "clientRole": false, "containerId": "statistiloto" }
+      {
+        "name": "USER",
+        "description": "Standard Statistiloto user",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Statistiloto administrator",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
+      }
     ]
   },
-
   "groups": [
-    { "name": "users", "path": "/users" },
-    { "name": "admins", "path": "/admins" }
+    {
+      "name": "users",
+      "path": "/users"
+    },
+    {
+      "name": "admins",
+      "path": "/admins"
+    }
   ],
-
   "clients": [
     {
       "clientId": "statistiloto-ui",
@@ -43,13 +58,28 @@
       "authorizationServicesEnabled": false,
       "rootUrl": "http://localhost",
       "baseUrl": "/",
-      "redirectUris": ["/*", "http://localhost/*", "http://localhost", "http://127.0.0.1/*", "http://127.0.0.1"],
-      "webOrigins": ["http://localhost", "http://127.0.0.1"],
+      "redirectUris": [
+        "/*",
+        "http://localhost/*",
+        "http://localhost",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1"
+      ],
+      "webOrigins": [
+        "http://localhost",
+        "http://127.0.0.1"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost/*"
       },
-      "defaultClientScopes": ["openid", "profile", "email", "roles", "web-origins"],
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
       "protocolMappers": [
         {
           "name": "audience-statistiloto-ui",
@@ -58,6 +88,18 @@
           "consentRequired": false,
           "config": {
             "included.client.audience": "statistiloto-ui",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "false",
             "id.token.claim": "false",
             "access.token.claim": "true",
             "userinfo.token.claim": "false"
@@ -79,18 +121,51 @@
       "redirectUris": [],
       "webOrigins": [],
       "secret": "${env.STATISTILOTO_SERVER_CLIENT_SECRET}",
-      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
     }
   ],
-
   "clientScopes": [
-    { "name": "openid", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true" } },
-    { "name": "profile", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true" } },
-    { "name": "email", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true" } },
-    { "name": "roles", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true" } },
-    { "name": "web-origins", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true" } }
+    {
+      "name": "openid",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "web-origins",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    }
   ],
-
   "users": [
     {
       "username": "admin@statistiloto.local",
@@ -100,10 +175,19 @@
       "firstName": "Admin",
       "lastName": "Statistiloto",
       "credentials": [
-        { "type": "password", "value": "admin-password-change-me", "temporary": false }
+        {
+          "type": "password",
+          "value": "admin-password-change-me",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["USER", "ADMIN"],
-      "groups": ["/admins"]
+      "realmRoles": [
+        "USER",
+        "ADMIN"
+      ],
+      "groups": [
+        "/admins"
+      ]
     },
     {
       "username": "user@statistiloto.local",
@@ -113,10 +197,18 @@
       "firstName": "Demo",
       "lastName": "User",
       "credentials": [
-        { "type": "password", "value": "user-password-change-me", "temporary": false }
+        {
+          "type": "password",
+          "value": "user-password-change-me",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["USER"],
-      "groups": ["/users"]
+      "realmRoles": [
+        "USER"
+      ],
+      "groups": [
+        "/users"
+      ]
     }
   ]
 }

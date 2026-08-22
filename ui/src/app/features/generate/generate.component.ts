@@ -10,6 +10,7 @@ import {
   NumberSetListComponent,
   NumberSetItem,
 } from '../../shared/components/number-set-list/number-set-list.component';
+import { AnalyzeModalComponent } from '../../shared/components/analyze-modal/analyze-modal.component';
 import {
   GenerateFormRequest,
   LotteryResultResponse,
@@ -25,6 +26,7 @@ import {
     TranslatePipe,
     ArchiveWindowComponent,
     NumberSetListComponent,
+    AnalyzeModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -59,18 +61,30 @@ import {
       </div>
 
       @if (luckySets().length > 0) {
-        <div class="form-row checkbox-row">
-          <label>
-            <input type="checkbox" [(ngModel)]="includeLucky" />
-            {{ 'generate.includeLucky' | translate }}
-          </label>
-          @if (includeLucky) {
-            <select [(ngModel)]="selectedLuckyId">
-              @for (s of luckySets(); track s.id) {
-                <option [ngValue]="s.id">{{ s.numbers.join(', ') }}</option>
-              }
-            </select>
-          }
+        <div class="lucky-picker">
+          <span class="label">{{ 'generate.includeLucky' | translate }}</span>
+          <div class="lucky-cards">
+            <button
+              type="button"
+              class="lucky-card"
+              [class.selected]="!includeLucky"
+              (click)="selectLucky(null)"
+            >
+              <span class="card-label">{{ 'generate.noLucky' | translate }}</span>
+            </button>
+            @for (s of luckySets(); track s.id) {
+              <button
+                type="button"
+                class="lucky-card"
+                [class.selected]="includeLucky && selectedLuckyId === s.id"
+                (click)="selectLucky(s.id)"
+              >
+                @for (num of s.numbers; track num) {
+                  <span class="mini-ball">{{ num }}</span>
+                }
+              </button>
+            }
+          </div>
         </div>
       }
 
@@ -81,22 +95,62 @@ import {
           <h3>{{ 'generate.results' | translate }}</h3>
           <app-number-set-list
             [items]="formItems()"
-            [showAnalyze]="false"
+            [showAnalyze]="true"
             [showSave]="true"
             [showDelete]="false"
+            (analyze)="onAnalyzeForm($event)"
             (save)="onSaveForm($event)"
           />
         </div>
       }
     </section>
+
+    @if (modalOpen()) {
+      <app-analyze-modal
+        [formNumbers]="modalForm()"
+        (close)="modalOpen.set(false)"
+      />
+    }
   `,
   styles: [`
     .form-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
     .form-row { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
     .form-row label { font-size: 13px; color: var(--text-secondary); }
     input, select { padding: 8px; border: 1px solid var(--border); border-radius: 4px; }
-    .checkbox-row { flex-direction: row; align-items: center; gap: 12px; }
     .results { margin-top: 24px; }
+    .lucky-picker { margin: 16px 0; }
+    .lucky-picker .label { font-size: 14px; color: var(--text-secondary); display: block; margin-bottom: 8px; }
+    .lucky-cards { display: flex; gap: 8px; flex-wrap: wrap; }
+    .lucky-card {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .lucky-card.selected {
+      border-color: var(--primary);
+      background: rgba(25, 118, 210, 0.08);
+    }
+    .lucky-card:hover { border-color: var(--primary); }
+    .card-label { font-size: 13px; color: var(--text-secondary); }
+    .mini-ball {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
   `],
 })
 export class GenerateComponent {
@@ -115,6 +169,9 @@ export class GenerateComponent {
   result = signal<LotteryResultResponse | null>(null);
   luckySets = signal<SavedNumbersResponse[]>([]);
   formItems = signal<NumberSetItem[]>([]);
+
+  modalOpen = signal(false);
+  modalForm = signal<number[]>([]);
 
   constructor() {
     this.loadLuckySets();
@@ -183,5 +240,21 @@ export class GenerateComponent {
         next: () => this.toast.success(this.lang.t('lucky.saved')),
         error: (err) => this.toast.error(err.message ?? this.lang.t('common.error')),
       });
+  }
+
+  onAnalyzeForm(item: NumberSetItem): void {
+    this.modalForm.set(item.numbers);
+    this.modalOpen.set(true);
+  }
+
+  /** Select a lucky set (or null for no lucky numbers). */
+  selectLucky(id: number | null): void {
+    if (id === null) {
+      this.includeLucky = false;
+      this.selectedLuckyId = null;
+    } else {
+      this.includeLucky = true;
+      this.selectedLuckyId = id;
+    }
   }
 }

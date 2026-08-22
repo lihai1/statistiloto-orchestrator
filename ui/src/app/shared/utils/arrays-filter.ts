@@ -1,24 +1,25 @@
 /**
  * Ports the legacy `arrays-filter` pipe logic.
  *
- * The analyze API returns a flat frequency map { number → count }.
- * The legacy app grouped results by pair size (1–6) and computed
- * combinations counts. This utility groups the frequency entries into
- * AnalyzedGroup objects keyed by how many numbers are in each group.
+ * The analyze API now returns grouped frequency data: one FrequencyGroupResponse
+ * per group size (1–6), each containing FrequencyEntryResponse items with the
+ * number combination and its occurrence count.
  *
- * Since the new API returns a flat frequency map (not the raw pair arrays),
- * we group by frequency value ranges. This is a simplified adaptation of the
- * legacy grouping that works with the new contract.
+ * This utility converts the API response into AnalyzedGroup objects that the
+ * Analyze page and Analyze modal render as numbered tabs (1–6), mirroring the
+ * legacy ArraysFilter pipe that grouped the old 2D-array output by row length.
  */
+
+import { FrequencyGroupResponse } from '../models/lottery.models';
 
 export interface AnalyzedGroup {
   /** Pair/group size (1–6) */
   size: number;
-  /** Number of combinations in this group */
+  /** Number of possible combinations for this group size */
   combos: number;
   /** Entries in this group */
-  entries: { number: number; count: number }[];
-  /** Total occurrences */
+  entries: { numbers: number[]; count: number }[];
+  /** Total occurrences (sum of entry counts) */
   total: number;
   /** Display title */
   title: string;
@@ -37,45 +38,45 @@ export function combinations(n: number, k: number): number {
 }
 
 /**
- * Group frequency entries by pair size (1–6). Each group contains entries
- * whose count falls into the corresponding frequency tier.
+ * Convert API frequency groups into AnalyzedGroup objects for display.
  *
- * This is an adaptation of the legacy `arrays-filter.transform` which
- * grouped raw pair arrays by their length. With the new flat frequency map,
- * we create groups by size (1–6) and populate each with the frequency
- * entries, computing the combinations count per group.
+ * The API returns one FrequencyGroupResponse per size (1–6). We map each
+ * to an AnalyzedGroup, computing the total occurrences and a localized title.
+ * If the API response is missing groups, we fill in empty placeholders for
+ * sizes 1–6 so the tabs always render.
  */
 export function groupBySize(
-  frequency: Record<number, number>,
+  frequencyGroups: FrequencyGroupResponse[] | undefined,
   maxSplit = 6,
+  lang: 'he' | 'en' = 'he',
 ): AnalyzedGroup[] {
-  const entries = Object.entries(frequency).map(([k, v]) => ({
-    number: Number(k),
-    count: Number(v),
-  }));
+  const groupMap = new Map<number, FrequencyGroupResponse>();
+  if (frequencyGroups) {
+    for (const g of frequencyGroups) {
+      groupMap.set(g.size, g);
+    }
+  }
 
   const groups: AnalyzedGroup[] = [];
   for (let size = 1; size <= maxSplit; size++) {
-    // For the flat frequency map, each entry is a single number with a count.
-    // We assign all entries to size 1 (single-number frequency) and leave
-    // larger sizes empty (they would come from the pairs API, not frequency).
-    if (size === 1) {
-      groups.push({
-        size,
-        combos: combinations(37, size),
-        entries: entries.sort((a, b) => b.count - a.count),
-        total: entries.reduce((sum, e) => sum + e.count, 0),
-        title: `שכיחות של ${size} מספרים`,
-      });
-    } else {
-      groups.push({
-        size,
-        combos: combinations(37, size),
-        entries: [],
-        total: 0,
-        title: `שכיחות של ${size} מספרים`,
-      });
-    }
+    const apiGroup = groupMap.get(size);
+    const entries = (apiGroup?.entries ?? []).map((e) => ({
+      numbers: e.numbers,
+      count: e.count,
+    }));
+    const total = entries.reduce((sum, e) => sum + e.count, 0);
+    const combos = apiGroup?.combos ?? combinations(37, size);
+    const ratio = combos > 0 ? (total / combos).toFixed(3) : '0.000';
+
+    groups.push({
+      size,
+      combos,
+      entries,
+      total,
+      title: lang === 'he'
+        ? `שכיחות של ${size} מספרים: ${ratio}`
+        : `Frequency of ${size} numbers: ${ratio}`,
+    });
   }
 
   return groups;

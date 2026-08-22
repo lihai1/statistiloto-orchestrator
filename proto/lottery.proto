@@ -121,18 +121,30 @@ message AnalyzeRequest {
 
 // AnalyzeResponse is the analysis of the user's form against history.
 message AnalyzeResponse {
-  // Matched historical draws (draw id + how many numbers matched).
-  repeated FormMatch matches = 1;
-  // Summary statistics for the submitted form.
-  map<int32, int32> frequency = 2;
+  // Grouped frequency results, one entry per group size (1–6).
+  // Each group contains the number combinations of that size and their
+  // occurrence counts, mirroring the legacy 2D-array analyze output.
+  repeated FrequencyGroup frequency_groups = 1;
+  // Number of historical draws used for the analysis (archive size).
+  int32 archive_size = 2;
 }
 
-// FormMatch is one historical draw that overlaps the submitted form.
-message FormMatch {
-  string draw_id = 1;
-  string draw_date = 2;
-  repeated int32 matched_numbers = 3;
-  int32 match_count = 4;
+// FrequencyEntry is one number combination and its occurrence count.
+message FrequencyEntry {
+  // The numbers in this combination (length = group size).
+  repeated int32 numbers = 1;
+  // How many times this combination appeared in the archive.
+  int32 count = 2;
+}
+
+// FrequencyGroup holds all frequency entries for a specific group size.
+message FrequencyGroup {
+  // Group size: 1 = single number, 2 = pair, 3 = triple, etc.
+  int32 size = 1;
+  // Total possible combinations for this group size (C(37, size)).
+  int32 combos = 2;
+  // Frequency entries in this group, sorted by count descending.
+  repeated FrequencyEntry entries = 3;
 }
 
 // HealthCheckRequest is an empty request for health check.

@@ -49,6 +49,10 @@ export class AuthService {
     this.keycloak.login({ redirectUri: window.location.href });
   }
 
+  register(): void {
+    this.keycloak.register({ redirectUri: window.location.href });
+  }
+
   logout(): void {
     this._authenticated.set(false);
     this._username.set(null);

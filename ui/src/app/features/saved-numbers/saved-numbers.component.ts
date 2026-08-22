@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
 import { ApiService } from '../../core/api/api.service';
 import { LanguageService } from '../../core/i18n/language.service';
 import { ToastService } from '../../shared/components/toast/toast.service';
@@ -8,6 +7,7 @@ import {
   NumberSetListComponent,
   NumberSetItem,
 } from '../../shared/components/number-set-list/number-set-list.component';
+import { AnalyzeModalComponent } from '../../shared/components/analyze-modal/analyze-modal.component';
 import {
   NumbersCategory,
   SavedNumbersResponse,
@@ -16,7 +16,7 @@ import {
 @Component({
   selector: 'app-saved-numbers',
   standalone: true,
-  imports: [TranslatePipe, NumberSetListComponent],
+  imports: [TranslatePipe, NumberSetListComponent, AnalyzeModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card">
@@ -73,14 +73,22 @@ import {
           </h3>
           <app-number-set-list
             [items]="lucky()"
-            [showAnalyze]="false"
+            [showAnalyze]="true"
             [showSave]="false"
             [showDelete]="true"
+            (analyze)="onAnalyze($event)"
             (delete)="onDelete($event)"
           />
         </div>
       }
     </section>
+
+    @if (modalOpen()) {
+      <app-analyze-modal
+        [formNumbers]="modalForm()"
+        (close)="modalOpen.set(false)"
+      />
+    }
   `,
   styles: [`
     .group { margin-top: 20px; }
@@ -105,13 +113,15 @@ export class SavedNumbersComponent {
   private api = inject(ApiService);
   private toast = inject(ToastService);
   protected lang = inject(LanguageService);
-  private router = inject(Router);
 
   loading = signal(false);
   error = signal<string | null>(null);
   forms = signal<NumberSetItem[]>([]);
   groups = signal<NumberSetItem[]>([]);
   lucky = signal<NumberSetItem[]>([]);
+
+  modalOpen = signal(false);
+  modalForm = signal<number[]>([]);
 
   allEmpty() {
     return this.forms().length === 0 && this.groups().length === 0 && this.lucky().length === 0;
@@ -147,10 +157,9 @@ export class SavedNumbersComponent {
   }
 
   onAnalyze(item: NumberSetItem): void {
-    // Navigate to analyze page with the numbers pre-filled via query params.
-    this.router.navigate(['/analyze'], {
-      queryParams: { form: item.numbers.join(',') },
-    });
+    // Open the analyze modal inline (recursion component) instead of navigating.
+    this.modalForm.set(item.numbers);
+    this.modalOpen.set(true);
   }
 
   onDelete(item: NumberSetItem): void {

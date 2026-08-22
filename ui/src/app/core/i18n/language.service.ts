@@ -62,7 +62,12 @@ const he: Record<string, string> = {
   'nav.saved': 'המספרים שלי',
   'auth.login': 'התחבר',
   'auth.logout': 'התנתק',
+  'auth.register': 'הרשמה',
   'lang.toggle': 'EN',
+  'menu.open': 'תפריט',
+  'menu.close': 'סגור',
+  'menu.navigation': 'ניווט',
+  'menu.archive': 'טווח ארכיון',
 
   // ── Home ──
   'home.title': 'סטטיסטילוטו',
@@ -82,6 +87,7 @@ const he: Record<string, string> = {
   'generate.formType.systematic': 'שיטתי',
   'generate.howMany': 'כמות',
   'generate.includeLucky': 'להוסיף גם את מספרי המזל שלך?',
+  'generate.noLucky': 'ללא מספרי מזל',
   'generate.strength': 'עוצמה',
   'generate.strength.strong': 'חזק',
   'generate.strength.weak': 'חלש',
@@ -115,11 +121,14 @@ const he: Record<string, string> = {
   'analyze.placeholder': '1, 2, 3, 4, 5, 6',
   'analyze.button': 'נתח',
   'analyze.frequency': 'שכיחות',
-  'analyze.matches': 'הגרלות תואמות',
-  'analyze.matchCount': '{count} התאמות',
   'analyze.loading': 'מנתח...',
   'analyze.empty': 'הזן לפחות מספר אחד',
   'analyze.tab': 'קבוצת {n}',
+  'analyze.selected': 'מספרים שנבחרו',
+  'analyze.clear': 'נקה בחירה',
+  'analyze.modalTitle': 'ניתוח המספרים',
+  'analyze.frequencyOf': 'שכיחות של {n} מספרים',
+  'analyze.noResults': 'אין תוצאות',
 
   // ── Saved numbers ──
   'saved.title': 'המספרים שלי',
@@ -144,6 +153,7 @@ const he: Record<string, string> = {
   'common.close': 'סגור',
   'common.calculate': 'מחשב',
   'common.count': '{count}',
+  'common.loadingMore': 'טוען נתונים נוספים...',
 };
 
 const en: Record<string, string> = {
@@ -157,7 +167,12 @@ const en: Record<string, string> = {
   'nav.saved': 'My Numbers',
   'auth.login': 'Login',
   'auth.logout': 'Logout',
+  'auth.register': 'Register',
   'lang.toggle': 'עב',
+  'menu.open': 'Menu',
+  'menu.close': 'Close',
+  'menu.navigation': 'Navigation',
+  'menu.archive': 'Archive Range',
 
   // ── Home ──
   'home.title': 'Statistiloto',
@@ -177,6 +192,7 @@ const en: Record<string, string> = {
   'generate.formType.systematic': 'Systematic',
   'generate.howMany': 'How many',
   'generate.includeLucky': 'Include your lucky numbers?',
+  'generate.noLucky': 'No lucky numbers',
   'generate.strength': 'Strength',
   'generate.strength.strong': 'Strong',
   'generate.strength.weak': 'Weak',
@@ -210,11 +226,14 @@ const en: Record<string, string> = {
   'analyze.placeholder': '1, 2, 3, 4, 5, 6',
   'analyze.button': 'Analyze',
   'analyze.frequency': 'Frequency',
-  'analyze.matches': 'Matching Draws',
-  'analyze.matchCount': '{count} matches',
   'analyze.loading': 'Analyzing...',
   'analyze.empty': 'Please enter at least one number',
   'analyze.tab': 'Group {n}',
+  'analyze.selected': 'Selected numbers',
+  'analyze.clear': 'Clear selection',
+  'analyze.modalTitle': 'Analyze Numbers',
+  'analyze.frequencyOf': 'Frequency of {n} numbers',
+  'analyze.noResults': 'No results',
 
   // ── Saved numbers ──
   'saved.title': 'My Numbers',
@@ -239,4 +258,5 @@ const en: Record<string, string> = {
   'common.close': 'Close',
   'common.calculate': 'Computing',
   'common.count': '{count}',
+  'common.loadingMore': 'Loading more...',
 };

@@ -1,3 +1,6 @@
 [submodule "lottery-stats-server"]
 	path = lottery-stats-server
 	url = https://github.com/lihai1/stat-tree-server.git
+[submodule "agent"]
+	path = agent
+	url = ../agent

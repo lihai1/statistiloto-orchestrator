@@ -32,4 +32,18 @@ describe('TranslatePipe', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent.trim()).toBe('Generate');
   });
+
+  it('should update already-rendered text when language toggles', () => {
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent.trim()).toBe('הגרל טופס');
+
+    lang.setLang('en');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent.trim()).toBe('Generate');
+
+    lang.setLang('he');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent.trim()).toBe('הגרל טופס');
+  });
 });

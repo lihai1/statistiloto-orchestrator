@@ -35,18 +35,21 @@ export interface PairResponse {
   count: number;
 }
 
-export interface FormMatchResponse {
-  drawId: string;
-  drawDate: string;
-  matchedNumbers: number[];
-  matchCount: number;
+export interface FrequencyEntryResponse {
+  numbers: number[];
+  count: number;
+}
+
+export interface FrequencyGroupResponse {
+  size: number;
+  combos: number;
+  entries: FrequencyEntryResponse[];
 }
 
 export interface LotteryResultResponse {
   forms?: number[][];
   pairs?: PairResponse[];
-  frequency?: Record<number, number>;
-  matches?: FormMatchResponse[];
+  frequencyGroups?: FrequencyGroupResponse[];
 }
 
 export interface SaveNumbersRequest {

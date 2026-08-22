@@ -14,7 +14,10 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       <h1>{{ 'home.title' | translate }}</h1>
       <p>{{ 'home.subtitle' | translate }}</p>
       @if (!auth.isAuthenticated()) {
-        <button class="primary" (click)="auth.login()">{{ 'home.cta' | translate }}</button>
+        <div class="auth-cta">
+          <button class="primary" (click)="auth.login()">{{ 'home.cta' | translate }}</button>
+          <button class="secondary" (click)="auth.register()">{{ 'auth.register' | translate }}</button>
+        </div>
       } @else {
         <div class="actions">
           <a routerLink="/generate" class="action-link">{{ 'home.action.generate' | translate }}</a>
@@ -31,6 +34,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
     h1 { font-size: 32px; margin: 0 0 12px; color: var(--primary); }
     p { color: var(--text-secondary); margin: 0 0 24px; }
     .actions { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+    .auth-cta { display: flex; gap: 12px; justify-content: center; }
     .action-link {
       padding: 10px 20px;
       border: 1px solid var(--primary);

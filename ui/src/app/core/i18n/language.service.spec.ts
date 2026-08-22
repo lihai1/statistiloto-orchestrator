@@ -38,7 +38,7 @@ describe('LanguageService', () => {
 
   it('should interpolate params', () => {
     service.setLang('en');
-    expect(service.t('analyze.matchCount', { count: 3 })).toBe('3 matches');
+    expect(service.t('analyze.frequencyOf', { n: 3 })).toBe('Frequency of 3 numbers');
   });
 
   it('should fall back to key when missing', () => {

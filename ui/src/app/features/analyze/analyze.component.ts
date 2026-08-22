@@ -1,15 +1,20 @@
-import { ChangeDetectionStrategy, Component, Input, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, Input, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { LanguageService } from '../../core/i18n/language.service';
 import { ArchiveWindowService } from '../../shared/services/archive-window.service';
 import { ToastService } from '../../shared/components/toast/toast.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 import { ArchiveWindowComponent } from '../../shared/components/archive-window/archive-window.component';
-import { NumberSetComponent } from '../../shared/components/number-set/number-set.component';
+import { LotteryBallComponent } from '../../shared/components/lottery-ball/lottery-ball.component';
+import { AnalyzeModalComponent } from '../../shared/components/analyze-modal/analyze-modal.component';
+import {
+  NumberSetListComponent,
+  NumberSetItem,
+} from '../../shared/components/number-set-list/number-set-list.component';
 import {
   AnalyzeRequest,
   LotteryResultResponse,
+  NumbersCategory,
 } from '../../shared/models/lottery.models';
 import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
 
@@ -17,10 +22,11 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
   selector: 'app-analyze',
   standalone: true,
   imports: [
-    FormsModule,
     TranslatePipe,
     ArchiveWindowComponent,
-    NumberSetComponent,
+    LotteryBallComponent,
+    AnalyzeModalComponent,
+    NumberSetListComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -30,19 +36,41 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
 
       <app-archive-window />
 
-      <div class="form-row">
-        <label for="form">{{ 'analyze.input' | translate }}</label>
-        <input
-          id="form"
-          type="text"
-          [(ngModel)]="formInput"
-          [placeholder]="'analyze.placeholder' | translate"
-        />
+      @if (selected().length > 0) {
+        <div class="selected-section">
+          <span class="label">{{ 'analyze.selected' | translate }}</span>
+          <div class="selected-balls">
+            @for (num of selected(); track num; let i = $index) {
+              <app-lottery-ball
+                [number]="num"
+                variant="strong"
+                size="md"
+                (click)="removeNumber(i)"
+              />
+            }
+          </div>
+          <button class="secondary clear-btn" (click)="clearSelection()">
+            {{ 'analyze.clear' | translate }}
+          </button>
+        </div>
+      }
+
+      <div class="pick-grid">
+        @for (num of choices(); track num) {
+          <app-lottery-ball
+            [number]="num"
+            variant="muted"
+            size="md"
+            (click)="addNumber(num)"
+          />
+        }
       </div>
 
-      <button class="primary" (click)="analyze()">{{ 'analyze.button' | translate }}</button>
+      <button class="primary" (click)="analyze()" [disabled]="selected().length === 0">
+        {{ 'analyze.button' | translate }}
+      </button>
 
-      @if (result()?.frequency) {
+      @if (result()?.frequencyGroups) {
         <div class="results">
           <h3>{{ 'analyze.frequency' | translate }}</h3>
 
@@ -51,7 +79,7 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
               <button
                 class="tab"
                 [class.active]="currentTab() === g.size"
-                (click)="currentTab.set(g.size)"
+                (click)="selectTab(g.size)"
               >
                 {{ g.size }}
               </button>
@@ -61,44 +89,60 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
           @for (g of groups(); track g.size) {
             @if (currentTab() === g.size) {
               <div class="tab-content">
-                <div class="group-title">{{ g.title }}</div>
-                @if (g.entries.length > 0) {
-                  <div class="freq-list">
-                    @for (entry of g.entries; track entry.number) {
-                      <div class="freq-row">
-                        <app-number-set [numbers]="[entry.number]" size="sm" />
-                        <span class="freq-count">×{{ entry.count }}</span>
-                      </div>
-                    }
-                  </div>
-                } @else {
-                  <p class="empty-tab">—</p>
+                <div class="group-title" (click)="toggleExpand(g.size)">
+                  <span class="expand-icon">{{ expandedTabs().has(g.size) ? '▾' : '▸' }}</span>
+                  {{ g.title }}
+                </div>
+                @if (expandedTabs().has(g.size)) {
+                  @if (groupItems()[g.size - 1]?.length) {
+                    <app-number-set-list
+                      [items]="groupItems()[g.size - 1]"
+                      [showAnalyze]="true"
+                      [showSave]="true"
+                      [showDelete]="false"
+                      (analyze)="onAnalyzeEntry($event)"
+                      (save)="onSaveEntry($event)"
+                    />
+                  } @else {
+                    <p class="empty-tab">{{ 'analyze.noResults' | translate }}</p>
+                  }
                 }
               </div>
             }
           }
         </div>
       }
-
-      @if (result()?.matches?.length) {
-        <div class="results">
-          <h3>{{ 'analyze.matches' | translate }}</h3>
-          @for (match of result()!.matches; track match.drawId) {
-            <div class="match-row">
-              <span class="match-date">{{ match.drawDate }}</span>
-              <app-number-set [numbers]="match.matchedNumbers" size="sm" />
-              <span class="match-count">{{ 'analyze.matchCount' | translate: { count: match.matchCount } }}</span>
-            </div>
-          }
-        </div>
-      }
     </section>
+
+    @if (modalOpen()) {
+      <app-analyze-modal
+        [formNumbers]="modalForm()"
+        (close)="modalOpen.set(false)"
+        (saveSubGroup)="onSaveEntry($event)"
+      />
+    }
   `,
   styles: [`
-    .form-row { margin: 12px 0; display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
-    .form-row label { font-size: 13px; color: var(--text-secondary); }
-    input { padding: 8px; border: 1px solid var(--border); border-radius: 4px; }
+    .selected-section {
+      margin: 16px 0;
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+    .label { font-size: 14px; color: var(--text-secondary); display: block; margin-bottom: 8px; }
+    .selected-balls { display: flex; gap: 6px; flex-wrap: wrap; }
+    .selected-balls app-lottery-ball { cursor: pointer; }
+    .clear-btn { margin-top: 10px; font-size: 12px; padding: 4px 12px; }
+    .pick-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0;
+      max-width: 500px;
+    }
+    .pick-grid app-lottery-ball { cursor: pointer; }
     .results { margin-top: 24px; }
+    .results h3 { font-size: 15px; }
     .tabs { display: flex; gap: 4px; margin: 12px 0; }
     .tab {
       padding: 6px 16px;
@@ -106,21 +150,19 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
       border: 1px solid var(--border);
       color: var(--text);
       border-radius: 4px;
+      font-size: 13px;
     }
     .tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .group-title { font-weight: 600; margin-bottom: 8px; }
-    .freq-list { display: flex; flex-direction: column; gap: 4px; }
-    .freq-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--border); }
-    .freq-count { color: var(--text-secondary); font-weight: 600; }
-    .match-row {
+    .group-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
+      gap: 6px;
     }
-    .match-date { font-size: 13px; color: var(--text-secondary); min-width: 100px; }
-    .match-count { font-size: 13px; color: var(--primary); font-weight: 600; }
+    .expand-icon { font-size: 12px; color: var(--text-secondary); }
     .empty-tab { color: var(--text-secondary); }
   `],
 })
@@ -130,33 +172,87 @@ export class AnalyzeComponent {
   protected lang = inject(LanguageService);
   private archive = inject(ArchiveWindowService);
 
-  formInput = '';
+  private readonly _selected = signal<number[]>([]);
+  readonly selected = computed(() => this._selected());
+
+  readonly choices = computed(() => {
+    const selected = new Set(this._selected());
+    const all: number[] = [];
+    for (let i = 1; i <= 37; i++) {
+      if (!selected.has(i)) all.push(i);
+    }
+    return all;
+  });
+
   result = signal<LotteryResultResponse | null>(null);
   groups = signal<AnalyzedGroup[]>([]);
   currentTab = signal(1);
+  expandedTabs = signal<Set<number>>(new Set([1]));
+
+  groupItems = computed<NumberSetItem[][]>(() => {
+    return this.groups().map((g) =>
+      g.entries.map((e) => ({ numbers: e.numbers, count: e.count })),
+    );
+  });
+
+  modalOpen = signal(false);
+  modalForm = signal<number[]>([]);
 
   /** Bound from the ?form= query param (via withComponentInputBinding). */
   @Input() set form(value: string | undefined) {
     if (value) {
-      this.formInput = value;
+      const nums = value
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n));
+      this._selected.set(nums);
       this.analyze();
     }
   }
 
-  analyze(): void {
-    const form = this.formInput
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => !isNaN(n));
+  addNumber(n: number): void {
+    this._selected.update((arr) => [...arr, n].sort((a, b) => a - b));
+  }
 
-    if (form.length === 0) {
+  removeNumber(i: number): void {
+    this._selected.update((arr) => arr.filter((_, idx) => idx !== i));
+  }
+
+  clearSelection(): void {
+    this._selected.set([]);
+    this.result.set(null);
+  }
+
+  toggleExpand(size: number): void {
+    this.expandedTabs.update((s) => {
+      const next = new Set(s);
+      if (next.has(size)) next.delete(size);
+      else next.add(size);
+      return next;
+    });
+  }
+
+  /** Switch to a tab and auto-expand it so content shows immediately. */
+  selectTab(size: number): void {
+    this.currentTab.set(size);
+    this.expandedTabs.update((s) => {
+      if (s.has(size)) return s;
+      const next = new Set(s);
+      next.add(size);
+      return next;
+    });
+  }
+
+  analyze(): void {
+    const formNums = this._selected();
+    if (formNums.length === 0) {
       this.toast.info(this.lang.t('analyze.empty'));
       return;
     }
 
     this.toast.showLoading();
     const req: AnalyzeRequest = {
-      form,
+      form: formNums,
       from: this.archive.from(),
       to: this.archive.to(),
     };
@@ -164,8 +260,9 @@ export class AnalyzeComponent {
     this.api.analyze(req).subscribe({
       next: (res) => {
         this.result.set(res);
-        this.groups.set(groupBySize(res.frequency ?? {}, 6));
+        this.groups.set(groupBySize(res.frequencyGroups, 6, this.lang.lang()));
         this.currentTab.set(1);
+        this.expandedTabs.set(new Set([1]));
         this.toast.hideLoading();
       },
       error: (err) => {
@@ -173,5 +270,27 @@ export class AnalyzeComponent {
         this.toast.error(err.message ?? this.lang.t('common.connectionError'));
       },
     });
+  }
+
+  /** Open the analyze modal with the given form (used by parent components). */
+  openModal(form: number[]): void {
+    this.modalForm.set(form);
+    this.modalOpen.set(true);
+  }
+
+  /** Save a frequency entry to saved numbers as a group-calculated item. */
+  onSaveEntry(item: NumberSetItem): void {
+    this.api.saveNumbers({
+      category: NumbersCategory.GROUP_CALCULATED,
+      numbers: item.numbers,
+    }).subscribe({
+      next: () => this.toast.success(this.lang.t('saved.save')),
+      error: (err) => this.toast.error(err.message ?? this.lang.t('common.connectionError')),
+    });
+  }
+
+  /** Open the analyze modal with a frequency entry's numbers (recursion). */
+  onAnalyzeEntry(item: NumberSetItem): void {
+    this.openModal(item.numbers);
   }
 }

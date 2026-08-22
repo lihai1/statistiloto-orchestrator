@@ -8,6 +8,7 @@ import {
   NumberSetListComponent,
   NumberSetItem,
 } from '../../shared/components/number-set-list/number-set-list.component';
+import { AnalyzeModalComponent } from '../../shared/components/analyze-modal/analyze-modal.component';
 import {
   NumbersCategory,
   SavedNumbersResponse,
@@ -20,6 +21,7 @@ import {
     TranslatePipe,
     LotteryBallComponent,
     NumberSetListComponent,
+    AnalyzeModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -32,7 +34,7 @@ import {
           <span class="label">{{ 'lucky.selected' | translate }}</span>
           <div class="selected-balls">
             @for (num of selected(); track num; let i = $index) {
-              <app-lottery-ball [number]="num" variant="strong" size="md" />
+              <app-lottery-ball [number]="num" variant="strong" size="md" (click)="removeNumber(i)" />
             }
           </div>
         </div>
@@ -58,14 +60,22 @@ import {
           <h3>{{ 'lucky.title' | translate }}</h3>
           <app-number-set-list
             [items]="savedItems()"
-            [showAnalyze]="false"
+            [showAnalyze]="true"
             [showSave]="false"
             [showDelete]="true"
+            (analyze)="onAnalyze($event)"
             (delete)="onDelete($event)"
           />
         </div>
       }
     </section>
+
+    @if (modalOpen()) {
+      <app-analyze-modal
+        [formNumbers]="modalForm()"
+        (close)="modalOpen.set(false)"
+      />
+    }
   `,
   styles: [`
     .selected-section {
@@ -98,6 +108,9 @@ export class LuckyComponent {
   private readonly _savedItems = signal<NumberSetItem[]>([]);
   readonly savedItems = computed(() => this._savedItems());
 
+  modalOpen = signal(false);
+  modalForm = signal<number[]>([]);
+
   readonly choices = computed(() => {
     const selected = new Set(this._selected());
     const all: number[] = [];
@@ -119,6 +132,10 @@ export class LuckyComponent {
       return;
     }
     this._selected.update((arr) => [...arr, n].sort((a, b) => a - b));
+  }
+
+  removeNumber(i: number): void {
+    this._selected.update((arr) => arr.filter((_, idx) => idx !== i));
   }
 
   save(): void {
@@ -157,6 +174,11 @@ export class LuckyComponent {
       },
       error: (err) => this.toast.error(err.message ?? this.lang.t('common.error')),
     });
+  }
+
+  protected onAnalyze(item: NumberSetItem): void {
+    this.modalForm.set(item.numbers);
+    this.modalOpen.set(true);
   }
 
   private toItem(s: SavedNumbersResponse): NumberSetItem {

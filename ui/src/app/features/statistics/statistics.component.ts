@@ -10,6 +10,7 @@ import {
   NumberSetListComponent,
   NumberSetItem,
 } from '../../shared/components/number-set-list/number-set-list.component';
+import { AnalyzeModalComponent } from '../../shared/components/analyze-modal/analyze-modal.component';
 import {
   LotteryResultResponse,
   StatisticsRequest,
@@ -23,6 +24,7 @@ import {
     TranslatePipe,
     ArchiveWindowComponent,
     NumberSetListComponent,
+    AnalyzeModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -63,13 +65,21 @@ import {
           <h3>{{ 'stats.results' | translate }}</h3>
           <app-number-set-list
             [items]="pairItems()"
-            [showAnalyze]="false"
+            [showAnalyze]="true"
             [showSave]="false"
             [showDelete]="false"
+            (analyze)="onAnalyze($event)"
           />
         </div>
       }
     </section>
+
+    @if (modalOpen()) {
+      <app-analyze-modal
+        [formNumbers]="modalForm()"
+        (close)="modalOpen.set(false)"
+      />
+    }
   `,
   styles: [`
     .form-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
@@ -92,6 +102,9 @@ export class StatisticsComponent {
 
   result = signal<LotteryResultResponse | null>(null);
   pairItems = signal<NumberSetItem[]>([]);
+
+  modalOpen = signal(false);
+  modalForm = signal<number[]>([]);
 
   load(): void {
     this.toast.showLoading();
@@ -119,5 +132,10 @@ export class StatisticsComponent {
         this.toast.error(err.message ?? this.lang.t('common.connectionError'));
       },
     });
+  }
+
+  onAnalyze(item: NumberSetItem): void {
+    this.modalForm.set(item.numbers);
+    this.modalOpen.set(true);
   }
 }
