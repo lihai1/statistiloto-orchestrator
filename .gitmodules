@@ -4,3 +4,6 @@
 [submodule "agent"]
 	path = agent
 	url = git@github.com:lihai1/statistiloto-agent.git
+[submodule "ui"]
+	path = ui
+	url = git@github.com:lihai1/statistiloto-ui.git
