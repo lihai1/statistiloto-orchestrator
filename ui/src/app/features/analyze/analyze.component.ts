@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
+import { AgentContextService } from '../../core/api/agent-context.service';
 import { LanguageService } from '../../core/i18n/language.service';
 import { ArchiveWindowService } from '../../shared/services/archive-window.service';
 import { ToastService } from '../../shared/components/toast/toast.service';
@@ -111,6 +112,11 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
             }
           }
         </div>
+        <div class="ask-ai-section">
+          <button class="ask-ai-btn" (click)="askAI()">
+            <i class="pi pi-comments"></i> {{ 'analyze.askAI' | translate }}
+          </button>
+        </div>
       }
     </section>
 
@@ -164,6 +170,20 @@ import { AnalyzedGroup, groupBySize } from '../../shared/utils/arrays-filter';
     }
     .expand-icon { font-size: 12px; color: var(--text-secondary); }
     .empty-tab { color: var(--text-secondary); }
+    .ask-ai-section { margin-top: 16px; }
+    .ask-ai-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .ask-ai-btn:hover { background: var(--primary-dark); }
   `],
 })
 export class AnalyzeComponent {
@@ -171,6 +191,7 @@ export class AnalyzeComponent {
   private toast = inject(ToastService);
   protected lang = inject(LanguageService);
   private archive = inject(ArchiveWindowService);
+  private agentContext = inject(AgentContextService);
 
   private readonly _selected = signal<number[]>([]);
   readonly selected = computed(() => this._selected());
@@ -292,5 +313,12 @@ export class AnalyzeComponent {
   /** Open the analyze modal with a frequency entry's numbers (recursion). */
   onAnalyzeEntry(item: NumberSetItem): void {
     this.openModal(item.numbers);
+  }
+
+  askAI(): void {
+    const selected = this.selected().join(', ');
+    this.agentContext.ask(
+      `I analyzed the numbers ${selected} against historical draws. Can you summarize the frequency results and suggest which number combinations appear most often?`,
+    );
   }
 }

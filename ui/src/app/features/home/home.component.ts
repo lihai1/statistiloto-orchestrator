@@ -25,6 +25,9 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           <a routerLink="/statistics" class="action-link">{{ 'home.action.statistics' | translate }}</a>
           <a routerLink="/analyze" class="action-link">{{ 'home.action.analyze' | translate }}</a>
           <a routerLink="/saved" class="action-link">{{ 'home.action.saved' | translate }}</a>
+          <a routerLink="/assistant" class="action-link ai-cta">
+            <i class="pi pi-comments"></i> {{ 'home.action.assistant' | translate }}
+          </a>
         </div>
       }
     </section>
@@ -42,6 +45,18 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       color: var(--primary);
     }
     .action-link:hover { background: var(--primary); color: white; text-decoration: none; }
+    .ai-cta {
+      background: var(--primary);
+      color: white !important;
+      border-color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-cta:hover {
+      background: var(--primary-dark);
+      color: white !important;
+    }
   `],
 })
 export class HomeComponent {

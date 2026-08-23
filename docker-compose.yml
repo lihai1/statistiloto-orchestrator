@@ -4,9 +4,11 @@ name: statistiloto-new
 # Statistiloto-New — full local development / deployment stack.
 #
 # Services:
-#   db        — PostgreSQL (shared, schemas: keycloak / app / lottery)
+#   db        — PostgreSQL (shared, schemas: keycloak / app / lottery / agent)
 #   auth      — Keycloak (OIDC, JWT issuance)
 #   lottery   — Go lottery-stats-server (algorithm + scraper, gRPC + REST)
+#   agent     — Python LangGraph agent worker (LLM, RAG, HITL)
+#   ollama    — Local LLM inference server (llama3.1:8b)
 #   server    — Java Spring Boot BFF (UI-facing REST, gRPC client)
 #   ui        — Angular PWA (Nginx static)
 #   proxy     — Traefik (TLS, routing, rate limiting, ForwardAuth)
@@ -18,7 +20,7 @@ name: statistiloto-new
 services:
   # ── Database ────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: statistiloto-db
     restart: unless-stopped
     environment:
@@ -29,6 +31,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init-schemas.sh:/docker-entrypoint-initdb.d/01-init-schemas.sh:ro
       - ./db/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+      - ./agent/db/init-agent.sql:/docker-entrypoint-initdb.d/03-init-agent.sql:ro
       - ./db/lotto.data:/seed/lotto.data:ro
     networks:
       - statistiloto-net
@@ -121,6 +124,7 @@ services:
       KEYCLOAK_ISSUER: http://auth:8080/auth/realms/statistiloto
       LOTTERY_GRPC_HOST: lottery
       LOTTERY_GRPC_PORT: 9090
+      AGENT_READ_TIMEOUT_MS: ${AGENT_READ_TIMEOUT_MS:-300000}
     networks:
       - statistiloto-net
     depends_on:
@@ -129,6 +133,8 @@ services:
       auth:
         condition: service_healthy
       lottery:
+        condition: service_healthy
+      agent:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
@@ -144,6 +150,64 @@ services:
       - "traefik.http.routers.server.tls=true"
       - "traefik.http.routers.server.middlewares=edge-jwt,rl-api,secure-headers"
       - "traefik.http.services.server.loadbalancer.server.port=8082"
+
+  # ── Python LangGraph agent worker ───────────────────────────────
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: statistiloto-agent
+    restart: unless-stopped
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-statistiloto}
+      JWT_VERIFY: "true"
+      JWKS_URL: http://auth:8080/auth/realms/statistiloto/protocol/openid-connect/certs
+      ISSUER: http://auth:8080/auth/realms/statistiloto
+      AUDIENCE: statistiloto-ui
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:0.5b
+      LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-300}
+      LOTTERY_GRPC_HOST: lottery
+      LOTTERY_GRPC_PORT: "9090"
+      BFF_BASE_URL: http://server:8082
+    networks:
+      - statistiloto-net
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      lottery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ── Ollama local LLM inference ──────────────────────────────────
+  # Serial inference only: one request / one loaded model at a time.
+  # Extra calls queue inside Ollama (bounded by OLLAMA_MAX_QUEUE).
+  ollama:
+    image: ollama/ollama:0.32.5
+    container_name: statistiloto-ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"        # max 1 in-flight inference per model
+      OLLAMA_MAX_LOADED_MODELS: "2"   # only one model resident in memory
+      OLLAMA_MAX_QUEUE: "64"          # bound the backlog before rejecting
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - statistiloto-net
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # ── Angular PWA (Nginx) ─────────────────────────────────────────
   ui:
@@ -181,6 +245,7 @@ services:
     depends_on:
       - auth
       - server
+      - agent
       - ui
 
 networks:
@@ -189,3 +254,4 @@ networks:
 
 volumes:
   postgres_data:
+  ollama_data:

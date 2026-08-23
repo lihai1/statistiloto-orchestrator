@@ -16,9 +16,11 @@ export class AuthService {
 
   private readonly _authenticated = signal(false);
   private readonly _username = signal<string | null>(null);
+  private readonly _isAdmin = signal(false);
 
   readonly isAuthenticated = computed(() => this._authenticated());
   readonly username = computed(() => this._username());
+  readonly isAdmin = computed(() => this._isAdmin());
 
   constructor() {
     this.keycloak = new Keycloak({
@@ -38,6 +40,11 @@ export class AuthService {
       this._authenticated.set(authenticated);
       if (authenticated) {
         this._username.set(this.keycloak.tokenParsed?.['preferred_username'] ?? null);
+        const roles = this.keycloak.tokenParsed?.['realm_access']?.['roles'] ?? [];
+        const groups = this.keycloak.tokenParsed?.['groups'] ?? [];
+        this._isAdmin.set(
+          roles.includes('ADMIN') || roles.includes('admin') || groups.includes('/admins'),
+        );
       }
     } catch (err) {
       console.error('Keycloak init failed', err);
@@ -56,6 +63,7 @@ export class AuthService {
   logout(): void {
     this._authenticated.set(false);
     this._username.set(null);
+    this._isAdmin.set(false);
     this.keycloak.logout({ redirectUri: window.location.origin });
   }
 

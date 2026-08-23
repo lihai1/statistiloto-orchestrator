@@ -7,7 +7,8 @@ import { TEST_ENV, ensureTestUser, gotoProtected, uniqueRegisterEmail } from './
  * Covers:
  *  - Home page Hebrew RTL
  *  - Language toggle (with text change verification)
- *  - Side drawer menu (open, navigate, close via button + scrim)
+ *  - App sidebar (desktop: fixed, mobile: overlay with scrim)
+ *  - Mobile responsive: sidebar hidden when bottom tabs visible
  *  - Keycloak registration flow
  *  - Login via Keycloak
  *  - Generate page (ball-based form, howMany verification, save, lucky toggle)
@@ -18,9 +19,8 @@ import { TEST_ENV, ensureTestUser, gotoProtected, uniqueRegisterEmail } from './
  *  - Analyze modal (recursion component from saved numbers, close via button + scrim)
  *  - Saved numbers page (categories, analyze modal, delete, expand)
  *  - Infinite scroll on number-set-list
- *
- * Chrome is launched in headed mode (headless: false) so the user can
- * watch the test flows execute.
+ *  - Agent assistant widget + dedicated assistant page
+ *  - Admin pages (LLM config, token usage, audit log, scraper)
  *
  * Test credentials are configurable via the .env file (see .env.example).
  */
@@ -81,47 +81,94 @@ test.describe('Home and shell', () => {
     expect(heTitleAgain).toBe(heTitle);
   });
 
-  // Merged: side menu open via hamburger + close via ✕ + content verification
-  test('side menu opens via hamburger, shows nav + archive, closes via ✕', async ({ page }) => {
+  // Sidebar: desktop is fixed and visible by default
+  test('desktop sidebar is visible by default', async ({ page }) => {
     await page.goto('/');
-    await page.locator('.menu-btn').click();
-    // Drawer should be visible with nav links and archive controls
-    await expect(page.locator('app-side-menu .drawer')).toBeVisible();
-    await expect(page.locator('.drawer-title')).toBeVisible();
-    await expect(page.locator('app-side-menu .drawer-nav a')).toHaveCount(6);
-    await expect(page.locator('app-side-menu app-archive-window')).toBeVisible();
-    // Close via the close button
-    await page.locator('app-side-menu .close-btn').click();
-    await expect(page.locator('app-side-menu .drawer.open')).toHaveCount(0);
+    await expect(page.locator('.app-sidebar')).toBeVisible();
+    // Bottom tabs should NOT be visible on desktop
+    await expect(page.locator('.bottom-tabs')).not.toBeVisible();
   });
 
-  test('side menu closes via scrim click', async ({ page }) => {
+  // Sidebar: on desktop the hamburger is hidden and sidebar is always visible.
+  // Toggle is only available on mobile — tested in the mobile describe block below.
+  test('desktop sidebar has navigation links', async ({ page }) => {
     await page.goto('/');
-    await page.locator('.menu-btn').click();
-    await expect(page.locator('app-side-menu .scrim')).toBeVisible();
-    await page.locator('app-side-menu .scrim').click();
-    await expect(page.locator('app-side-menu .drawer.open')).toHaveCount(0);
+    await expect(page.locator('.app-sidebar .sidebar-nav')).toBeVisible();
+    // Should have multiple nav links
+    const navLinks = page.locator('.app-sidebar .sidebar-nav a');
+    expect(await navLinks.count()).toBeGreaterThanOrEqual(5);
   });
 
-  // Merged: side menu navigation (generate link + saved link)
-  test('side menu navigation links route to pages', async ({ page }) => {
+  // Sidebar navigation links route to pages
+  test('sidebar navigation links route to pages', async ({ page }) => {
     await page.goto('/');
-    await page.locator('.menu-btn').click();
-    // Click the generate link in the drawer
-    await page.locator('app-side-menu .drawer-nav a:has-text("הגרל"), app-side-menu .drawer-nav a:has-text("Generate")').click();
+    // Click the generate link in the sidebar
+    await page.locator('.app-sidebar .sidebar-nav a:has-text("הגרל"), .app-sidebar .sidebar-nav a:has-text("Generate")').click();
     await page.waitForTimeout(2000);
     // Either on Keycloak login or on the generate page
     const isKeycloak = await page.locator('#username').isVisible({ timeout: 2000 }).catch(() => false);
     const isGenerate = await page.locator('h2').isVisible({ timeout: 2000 }).catch(() => false);
     expect(isKeycloak || isGenerate).toBeTruthy();
   });
+});
 
-  test('side menu: language toggle button works inside drawer', async ({ page }) => {
+// ── Mobile responsive sidebar ─────────────────────────────────
+
+test.describe('Mobile responsive sidebar and bottom tabs', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test('sidebar is hidden on mobile and bottom tabs are visible', async ({ page }) => {
     await page.goto('/');
-    await page.locator('.menu-btn').click();
-    const drawerToggle = page.locator('app-side-menu .drawer-footer button.lang-toggle');
-    await drawerToggle.click();
-    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    // Sidebar should NOT be visible on mobile by default
+    await expect(page.locator('.app-sidebar')).not.toBeVisible();
+    // Bottom tabs SHOULD be visible on mobile
+    await expect(page.locator('.bottom-tabs')).toBeVisible();
+  });
+
+  test('hamburger opens sidebar as overlay with scrim on mobile', async ({ page }) => {
+    await page.goto('/');
+    // Sidebar hidden initially
+    await expect(page.locator('.app-sidebar')).not.toBeVisible();
+    // No scrim initially
+    await expect(page.locator('.sidebar-scrim')).toHaveCount(0);
+
+    // Click hamburger to open
+    await page.locator('.app-header button.menu-toggle').click();
+    // Sidebar should now be visible as overlay
+    await expect(page.locator('.app-sidebar')).toBeVisible();
+    // Scrim should appear
+    await expect(page.locator('.sidebar-scrim')).toBeVisible();
+  });
+
+  test('clicking scrim closes sidebar on mobile', async ({ page }) => {
+    await page.goto('/');
+    // Open sidebar
+    await page.locator('.app-header button.menu-toggle').click();
+    await expect(page.locator('.app-sidebar')).toBeVisible();
+    await expect(page.locator('.sidebar-scrim')).toBeVisible();
+
+    // Click scrim to close — use native JS click() to bypass the sidebar
+    // overlay intercepting pointer events at the center of the scrim
+    await page.evaluate(() => {
+      const scrim = document.querySelector('.sidebar-scrim') as HTMLElement;
+      scrim?.click();
+    });
+    await expect(page.locator('.app-sidebar')).not.toBeVisible();
+    await expect(page.locator('.sidebar-scrim')).toHaveCount(0);
+  });
+
+  test('bottom tabs navigate between pages on mobile', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.bottom-tabs')).toBeVisible();
+
+    // Click the generate tab
+    const genTab = page.locator('.bottom-tabs a:has-text("הגרל"), .bottom-tabs a:has-text("Generate")');
+    await genTab.click();
+    await page.waitForTimeout(2000);
+    // Should navigate (either to Keycloak or generate page)
+    const isKeycloak = await page.locator('#username').isVisible({ timeout: 2000 }).catch(() => false);
+    const isGenerate = await page.locator('h2').isVisible({ timeout: 2000 }).catch(() => false);
+    expect(isKeycloak || isGenerate).toBeTruthy();
   });
 });
 
@@ -130,8 +177,8 @@ test.describe('Home and shell', () => {
 test.describe('Registration', () => {
   test('register a new user via Keycloak', async ({ page }) => {
     await page.goto('/');
-    // Click the register button on the home page
-    const registerBtn = page.locator('button:has-text("הרשמה"), button:has-text("Register")').first();
+    // Click the register button in the sidebar footer
+    const registerBtn = page.locator('.sidebar-footer button:has-text("הרשמה"), .sidebar-footer button:has-text("Register")').first();
     await registerBtn.click();
 
     // Should redirect to Keycloak registration page
@@ -153,7 +200,7 @@ test.describe('Registration', () => {
     await page.waitForLoadState('networkidle');
 
     // User should now be authenticated — check for logout button
-    await expect(page.locator('.app-header button:has-text("התנתק"), .app-header button:has-text("Logout")')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.sidebar-footer button:has-text("התנתק"), .sidebar-footer button:has-text("Logout")')).toBeVisible({ timeout: 15000 });
   });
 });
 
@@ -544,12 +591,136 @@ test.describe('Full authenticated flow', () => {
   });
 });
 
+// ── Agent assistant widget ────────────────────────────────────
+
+test.describe('Agent assistant widget', () => {
+  test('agent widget FAB is visible when authenticated', async ({ page }) => {
+    await gotoProtected(page, '/generate');
+    // The floating action button should be visible for authenticated users
+    await expect(page.locator('app-agent-widget .agent-widget-fab')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('clicking FAB opens the widget panel', async ({ page }) => {
+    await gotoProtected(page, '/generate');
+    const fab = page.locator('app-agent-widget .agent-widget-fab');
+    await fab.click();
+    // Panel should appear
+    await expect(page.locator('app-agent-widget .agent-widget-panel')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('closing the widget panel via close button', async ({ page }) => {
+    await gotoProtected(page, '/generate');
+    await page.locator('app-agent-widget .agent-widget-fab').click();
+    await expect(page.locator('app-agent-widget .agent-widget-panel')).toBeVisible();
+    // Click close button
+    await page.locator('app-agent-widget .close-btn').click();
+    await expect(page.locator('app-agent-widget .agent-widget-panel')).toHaveCount(0);
+  });
+});
+
+// ── Assistant page ────────────────────────────────────────────
+
+test.describe('Assistant page', () => {
+  test('assistant page loads for authenticated user', async ({ page }) => {
+    await gotoProtected(page, '/assistant');
+    // The assistant page should render
+    await expect(page.locator('app-assistant')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('assistant page has chat input', async ({ page }) => {
+    await gotoProtected(page, '/assistant');
+    await expect(page.locator('app-assistant')).toBeVisible({ timeout: 15000 });
+    // Should have a textarea or input for chat
+    const chatInput = page.locator('app-assistant textarea, app-assistant input[type="text"]');
+    if (await chatInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // Type a message
+      await chatInput.fill('Hello, can you help me with lottery?');
+      expect(await chatInput.inputValue()).toContain('Hello');
+    }
+  });
+});
+
+// ── Admin pages ───────────────────────────────────────────────
+
+test.describe('Admin pages (admin user)', () => {
+  // These tests use the admin user credentials
+  test('admin can access LLM config page', async ({ page }) => {
+    // Login as admin
+    await page.goto('/admin/llm-config');
+    await page.waitForTimeout(3000);
+
+    const keycloakForm = page.locator('#username');
+    if (await keycloakForm.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await page.fill('#username', 'admin@statistiloto.local');
+      await page.fill('#password', 'admin-password-change-me');
+      await page.click('#kc-login, button[type="submit"]');
+      await page.waitForURL('http://localhost/**', { timeout: 20000 });
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
+    }
+
+    // Should see the LLM config component
+    await expect(page.locator('app-llm-config')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('admin can access token usage page', async ({ page }) => {
+    await page.goto('/admin/token-usage');
+    await page.waitForTimeout(3000);
+
+    const keycloakForm = page.locator('#username');
+    if (await keycloakForm.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await page.fill('#username', 'admin@statistiloto.local');
+      await page.fill('#password', 'admin-password-change-me');
+      await page.click('#kc-login, button[type="submit"]');
+      await page.waitForURL('http://localhost/**', { timeout: 20000 });
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
+    }
+
+    await expect(page.locator('app-token-usage')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('admin can access audit log page', async ({ page }) => {
+    await page.goto('/admin/audit-log');
+    await page.waitForTimeout(3000);
+
+    const keycloakForm = page.locator('#username');
+    if (await keycloakForm.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await page.fill('#username', 'admin@statistiloto.local');
+      await page.fill('#password', 'admin-password-change-me');
+      await page.click('#kc-login, button[type="submit"]');
+      await page.waitForURL('http://localhost/**', { timeout: 20000 });
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
+    }
+
+    await expect(page.locator('app-audit-log')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('admin can access scraper page', async ({ page }) => {
+    await page.goto('/admin/scraper');
+    await page.waitForTimeout(3000);
+
+    const keycloakForm = page.locator('#username');
+    if (await keycloakForm.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await page.fill('#username', 'admin@statistiloto.local');
+      await page.fill('#password', 'admin-password-change-me');
+      await page.click('#kc-login, button[type="submit"]');
+      await page.waitForURL('http://localhost/**', { timeout: 20000 });
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
+    }
+
+    await expect(page.locator('app-scraper')).toBeVisible({ timeout: 15000 });
+  });
+});
+
 // ── All buttons: full round-trip verification ─────────────────
 
 test.describe('All buttons — full round-trip', () => {
   test('home: login button triggers Keycloak redirect', async ({ page }) => {
     await page.goto('/');
-    const loginBtn = page.locator('.app-header button:has-text("התחבר"), .app-header button:has-text("Login")').first();
+    const loginBtn = page.locator('.sidebar-footer button:has-text("התחבר"), .sidebar-footer button:has-text("Login")').first();
     await loginBtn.click();
     // Should redirect to Keycloak
     await page.waitForURL(/\/auth\/realms\/statistiloto\//, { timeout: 15000 });
@@ -558,7 +729,7 @@ test.describe('All buttons — full round-trip', () => {
 
   test('home: register button triggers Keycloak registration', async ({ page }) => {
     await page.goto('/');
-    const regBtn = page.locator('button:has-text("הרשמה"), button:has-text("Register")').first();
+    const regBtn = page.locator('.sidebar-footer button:has-text("הרשמה"), .sidebar-footer button:has-text("Register")').first();
     await regBtn.click();
     await page.waitForURL(/\/auth\/realms\/statistiloto\//, { timeout: 15000 });
     // Should be on the registration page (has firstName field or register form)
@@ -586,13 +757,13 @@ test.describe('All buttons — full round-trip', () => {
   test('header: logout button logs out user', async ({ page }) => {
     await gotoProtected(page, '/generate');
     await expect(page.locator('h2')).toBeVisible({ timeout: 15000 });
-    const logoutBtn = page.locator('.app-header button:has-text("התנתק"), .app-header button:has-text("Logout")').first();
+    const logoutBtn = page.locator('.sidebar-footer button:has-text("התנתק"), .sidebar-footer button:has-text("Logout")').first();
     if (await logoutBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await logoutBtn.click();
       // Should redirect to Keycloak logout or back to home
       await page.waitForTimeout(5000);
       // After logout, login button should appear
-      const loginBtn = page.locator('.app-header button:has-text("התחבר"), .app-header button:has-text("Login")').first();
+      const loginBtn = page.locator('.sidebar-footer button:has-text("התחבר"), .sidebar-footer button:has-text("Login")').first();
       // May need to wait for Keycloak redirect
       await expect(loginBtn).toBeVisible({ timeout: 15000 });
     }

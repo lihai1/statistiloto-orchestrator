@@ -31,6 +31,13 @@
         "composite": false,
         "clientRole": false,
         "containerId": "statistiloto"
+      },
+      {
+        "name": "PAID",
+        "description": "Paid Statistiloto subscriber",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
       }
     ]
   },
@@ -42,6 +49,10 @@
     {
       "name": "admins",
       "path": "/admins"
+    },
+    {
+      "name": "paid",
+      "path": "/paid"
     }
   ],
   "clients": [
@@ -156,7 +167,36 @@
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "group-membership",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "full.path": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
     },
     {
       "name": "web-origins",
@@ -208,6 +248,29 @@
       ],
       "groups": [
         "/users"
+      ]
+    },
+    {
+      "username": "paid@statistiloto.local",
+      "enabled": true,
+      "email": "paid@statistiloto.local",
+      "emailVerified": true,
+      "firstName": "Paid",
+      "lastName": "Subscriber",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "paid-password-change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER",
+        "PAID"
+      ],
+      "groups": [
+        "/users",
+        "/paid"
       ]
     }
   ]

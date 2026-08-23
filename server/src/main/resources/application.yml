@@ -55,6 +55,11 @@ lottery:
     host: ${LOTTERY_GRPC_HOST:localhost}
     port: ${LOTTERY_GRPC_PORT:9090}
 
+# ── Agent service (Python LangGraph worker) ───────────────────────
+agent:
+  service:
+    url: ${AGENT_SERVICE_URL:http://agent:8000}
+
 # ── Actuator ──────────────────────────────────────────────────────
 management:
   endpoints:

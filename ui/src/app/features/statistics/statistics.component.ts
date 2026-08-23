@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api/api.service';
+import { AgentContextService } from '../../core/api/agent-context.service';
 import { LanguageService } from '../../core/i18n/language.service';
 import { ArchiveWindowService } from '../../shared/services/archive-window.service';
 import { ToastService } from '../../shared/components/toast/toast.service';
@@ -71,6 +72,11 @@ import {
             (analyze)="onAnalyze($event)"
           />
         </div>
+        <div class="ask-ai-section">
+          <button class="ask-ai-btn" (click)="askAI()">
+            <i class="pi pi-comments"></i> {{ 'stats.askAI' | translate }}
+          </button>
+        </div>
       }
     </section>
 
@@ -87,6 +93,20 @@ import {
     .form-row label { font-size: 13px; color: var(--text-secondary); }
     input, select { padding: 8px; border: 1px solid var(--border); border-radius: 4px; }
     .results { margin-top: 24px; }
+    .ask-ai-section { margin-top: 16px; }
+    .ask-ai-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .ask-ai-btn:hover { background: var(--primary-dark); }
   `],
 })
 export class StatisticsComponent {
@@ -94,6 +114,7 @@ export class StatisticsComponent {
   private toast = inject(ToastService);
   protected lang = inject(LanguageService);
   private archive = inject(ArchiveWindowService);
+  private agentContext = inject(AgentContextService);
 
   groupSizes = [1, 2, 3, 4, 5, 6];
   groupSize = 2;
@@ -137,5 +158,12 @@ export class StatisticsComponent {
   onAnalyze(item: NumberSetItem): void {
     this.modalForm.set(item.numbers);
     this.modalOpen.set(true);
+  }
+
+  askAI(): void {
+    const count = this.result()?.pairs?.length ?? 0;
+    this.agentContext.ask(
+      `I found ${count} frequent number groups in the statistics. Which of these groups has the highest historical frequency?`,
+    );
   }
 }

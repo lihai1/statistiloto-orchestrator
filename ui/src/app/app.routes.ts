@@ -51,5 +51,62 @@ export const routes: Routes = [
       ),
     title: 'Saved Numbers',
   },
+  {
+    path: 'assistant',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/assistant/assistant.component').then(
+        (m) => m.AssistantComponent,
+      ),
+    title: 'AI Assistant',
+  },
+  {
+    path: 'admin',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/admin/admin.component').then(
+        (m) => m.AdminComponent,
+      ),
+    title: 'Admin',
+    children: [
+      {
+        path: 'llm-config',
+        loadComponent: () =>
+          import('./features/admin/llm-config/llm-config.component').then(
+            (m) => m.LlmConfigComponent,
+          ),
+        title: 'LLM Configuration',
+      },
+      {
+        path: 'token-usage',
+        loadComponent: () =>
+          import('./features/admin/token-usage/token-usage.component').then(
+            (m) => m.TokenUsageComponent,
+          ),
+        title: 'Token Usage',
+      },
+      {
+        path: 'audit-log',
+        loadComponent: () =>
+          import('./features/admin/audit-log/audit-log.component').then(
+            (m) => m.AuditLogComponent,
+          ),
+        title: 'Audit Log',
+      },
+      {
+        path: 'scraper',
+        loadComponent: () =>
+          import('./features/admin/scraper/scraper.component').then(
+            (m) => m.ScraperComponent,
+          ),
+        title: 'Scraper Control',
+      },
+      {
+        path: '',
+        redirectTo: 'llm-config',
+        pathMatch: 'full',
+      },
+    ],
+  },
   { path: '**', redirectTo: '' },
 ];

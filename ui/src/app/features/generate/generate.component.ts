@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api/api.service';
+import { AgentContextService } from '../../core/api/agent-context.service';
 import { LanguageService } from '../../core/i18n/language.service';
 import { ArchiveWindowService } from '../../shared/services/archive-window.service';
 import { ToastService } from '../../shared/components/toast/toast.service';
@@ -102,6 +103,11 @@ import {
             (save)="onSaveForm($event)"
           />
         </div>
+        <div class="ask-ai-section">
+          <button class="ask-ai-btn" (click)="askAI()">
+            <i class="pi pi-comments"></i> {{ 'generate.askAI' | translate }}
+          </button>
+        </div>
       }
     </section>
 
@@ -151,6 +157,20 @@ import {
       font-weight: 600;
       flex-shrink: 0;
     }
+    .ask-ai-section { margin-top: 16px; }
+    .ask-ai-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .ask-ai-btn:hover { background: var(--primary-dark); }
   `],
 })
 export class GenerateComponent {
@@ -158,6 +178,7 @@ export class GenerateComponent {
   private toast = inject(ToastService);
   protected lang = inject(LanguageService);
   private archive = inject(ArchiveWindowService);
+  private agentContext = inject(AgentContextService);
 
   formTypes = [6, 7, 8, 9, 10, 11, 12];
   formType = 6;
@@ -245,6 +266,13 @@ export class GenerateComponent {
   onAnalyzeForm(item: NumberSetItem): void {
     this.modalForm.set(item.numbers);
     this.modalOpen.set(true);
+  }
+
+  askAI(): void {
+    const count = this.result()?.forms?.length ?? 0;
+    this.agentContext.ask(
+      `I just generated ${count} lottery forms. Can you analyze them and tell me which one has the best historical coverage?`,
+    );
   }
 
   /** Select a lucky set (or null for no lucky numbers). */

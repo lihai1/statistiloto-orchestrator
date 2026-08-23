@@ -12,12 +12,12 @@ export default defineConfig({
     baseURL: 'http://localhost',
     trace: 'on-first-retry',
     ignoreHTTPSErrors: true,
-    // Launch Chrome visibly so the user can watch the test flows.
+    // Headless mode for CI/WSL; set PW_HEADLESS=false locally to watch.
     launchOptions: {
-      headless: false,
-      args: ['--start-maximized'],
+      headless: process.env.PW_HEADLESS !== 'false',
+      args: ['--no-sandbox'],
     },
-    viewport: null,
+    viewport: { width: 1280, height: 720 },
   },
   projects: [
     {
