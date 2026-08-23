@@ -9,3 +9,5 @@
 	url = git@github.com:lihai1/statistiloto-ui.git
 [submodule "server"]
 	path = server
+[submodule "proto"]
+	path = proto
