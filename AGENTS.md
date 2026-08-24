@@ -1,0 +1,107 @@
+# Statistiloto — Orchestrator Repo
+
+Monorepo orchestrating 8 Docker Compose services via 5 git submodules. This repo
+holds only orchestration: compose files, Traefik config, Keycloak realm, DB init,
+and a Makefile. All application code lives in submodules.
+
+## Services (docker-compose.yml)
+
+| Service   | Image / Build                | Port  | Submodule         | DB schema |
+|-----------|------------------------------|-------|-------------------|-----------|
+| `proxy`   | traefik:v3.2                 | 80,443| — (config in `proxy/`) | — |
+| `ui`      | build `ui/Dockerfile`        | 80    | `ui/`             | — |
+| `server`  | build `server/Dockerfile`    | 8082  | `server/`         | `app` |
+| `lottery` | build `lottery-stats-server/Dockerfile` | 8080,9090 | `lottery-stats-server/` | `lottery` |
+| `agent`   | build `agent/Dockerfile`     | 8000  | `agent/`          | `agent` |
+| `ollama`  | ollama/ollama:0.32.5         | 11434 | —                 | — |
+| `auth`    | keycloak:25.0                | 8080  | — (realm in `auth/`) | `keycloak` |
+| `db`      | pgvector/pgvector:pg16       | 5432  | — (init in `db/`)  | shared (4 schemas) |
+
+Request flow: Browser → Traefik → (`/` ui, `/api/*` server, `/auth/*` auth, `/agent/*` agent).
+Server → gRPC :9090 → lottery. Agent → gRPC :9090 → lottery, HTTP → ollama, HTTP → server.
+
+## Submodules
+
+| Path                  | Repo                                          |
+|-----------------------|-----------------------------------------------|
+| `lottery-stats-server/` | `git@github.com:lihai1/stat-tree-server.git` |
+| `agent/`              | `git@github.com:lihai1/statistiloto-agent.git` |
+| `ui/`                 | `git@github.com:lihai1/statistiloto-ui.git`   |
+| `server/`             | `git@github.com:lihai1/statistiloto-server.git`|
+| `proto/`              | `git@github.com:lihai1/statistiloto-proto.git`|
+
+## Common Makefile targets
+
+```bash
+make setup          # one-shot: submodules + .env + TLS certs
+make up             # build + start detached (uses docker-compose.yml)
+make up-dev         # dev compose
+make up-prod        # prod compose (docker-compose.prod.yml)
+make ps             # containers + health
+make health         # formatted health table
+make wait           # wait for all healthy
+make logs-SERVICE   # tail one service (e.g. make logs-server)
+make test           # all unit/integration tests
+make test-go test-java test-ui test-agent
+make test-e2e       # Playwright (stack must be running)
+make proto          # regenerate Go + Java stubs from proto/
+make proto-go proto-java
+make shell-SERVICE  # open shell in a service
+make db-shell       # psql
+make db-backup      # dump to backup.sql
+make db-restore FILE=f.sql
+make restart-SERVICE
+make scale-server N=2
+make clean          # containers (keep volumes)
+make clean-volumes  # DESTRUCTIVE: containers + volumes
+```
+
+## Cross-service changes (proto/lottery.proto)
+
+`proto/lottery.proto` is the single source of truth for the Java↔Go gRPC contract.
+When changing it:
+
+1. Inspect consumers in `server/` and `lottery-stats-server/` and `agent/`.
+2. Edit `proto/lottery.proto`.
+3. `make proto-go` (regenerates Go stubs in `lottery-stats-server/pkg/gen/`).
+4. `make proto-java` (regenerates Java stubs in `server/build/generated/`).
+5. Agent Python stubs: see `agent/AGENTS.md`.
+6. Update all three implementations.
+7. `make test-go && make test-java && make test-agent`.
+
+Do not duplicate protobuf DTO definitions in any service.
+
+## Local dev
+
+```bash
+cp .env.example .env   # set POSTGRES_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.
+cd proxy && ./generate-cert.sh && cd ..   # local TLS certs
+make up
+# open https://localhost/  (accept self-signed cert)
+```
+
+Test users (change passwords in production):
+- `admin@statistiloto.local` / `admin-password-change-me` — USER, ADMIN
+- `user@statistiloto.local`  / `user-password-change-me`  — USER (free)
+- `paid@statistiloto.local`  / `paid-password-change-me`  — USER, PAID
+
+## Directory map
+
+- `proxy/` — Traefik static + dynamic config, cert generation script.
+- `auth/realm-statistiloto.json` — Keycloak realm export (clients, users, roles).
+- `db/init-schemas.sh` + `db/init.sql` — creates 4 schemas (`keycloak`, `app`, `lottery`, `agent`).
+- `docs/` — ARCHITECTURE.md, API.md, FLOWS.md, REQUIREMENTS.md, runbook.md, PLAN.md.
+
+## Gotchas
+
+- Each service owns its own PostgreSQL schema — no shared tables. Boundaries enforced by schema, not by separate DBs.
+- `db/init-schemas.sh` runs once on fresh DB only; it is NOT a migration tool.
+- Submodule commits: edit inside the submodule, commit & push there, then `git add <submodule>` in this repo and commit the pointer bump.
+- Traefik ForwardAuth hits `server`'s `/api/auth/verify` — if server is down, all `/api/*` returns 401 even for valid tokens.
+- WSL: if `docker` fails with permission errors, run once per session: `sudo usermod -aG docker "$(whoami)"` then reopen shell.
+- Prod compose (`docker-compose.prod.yml`) overrides images to pre-built registries; do not assume `build:` is present there.
+
+## Verification (full-stack feature)
+
+Angular → Java REST → Java service → Go gRPC → DB → response → Angular UI.
+Use `make test-e2e` (Playwright) for the final user-visible flow.
