@@ -1,0 +1,86 @@
+# ───────────────────────────────────────────────────────────────────
+# Statistiloto-New — production override.
+#
+# Applied on top of docker-compose.yml via:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml ...
+#
+# Differences from dev:
+#   - Traefik exposes 443 with TLS (certs from ./proxy/certs).
+#   - Keycloak runs in production mode (`start` instead of `start-dev`).
+#   - restart: always (survives host reboots).
+#   - Lottery seed-on-boot disabled (data is already populated).
+#   - Traefik dashboard disabled.
+#   - Resource limits on compute-heavy services.
+#   - Ollama max-queue lowered for predictable latency.
+# ───────────────────────────────────────────────────────────────────
+
+services:
+  # ── Traefik: enable TLS on 443 ──────────────────────────────────
+  proxy:
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./proxy/traefik.prod.yml:/etc/traefik/traefik.yml:ro
+      - ./proxy/dynamic.prod.yml:/etc/traefik/dynamic.yml:ro
+      - ./proxy/certs:/certs:ro
+    restart: always
+
+  # ── Keycloak: production mode ───────────────────────────────────
+  auth:
+    command: ["start", "--import-realm", "--http-relative-path=/auth", "--features=hostname:v1"]
+    restart: always
+
+  # ── Go lottery service ──────────────────────────────────────────
+  lottery:
+    environment:
+      LOTTERY_SEED_ON_BOOT: "false"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  # ── Java BFF ────────────────────────────────────────────────────
+  server:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  # ── Python agent ────────────────────────────────────────────────
+  agent:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ── Ollama: tighter queue for predictable latency ───────────────
+  ollama:
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_MAX_QUEUE: "16"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  # ── UI / DB ─────────────────────────────────────────────────────
+  ui:
+    restart: always
+
+  db:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G

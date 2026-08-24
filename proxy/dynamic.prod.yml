@@ -1,0 +1,100 @@
+# Traefik dynamic configuration for Statistiloto (production, HTTPS).
+# Same routers/middlewares as dynamic.yml but entryPoints=websecure
+# and TLS enabled with certs from /certs.
+
+tls:
+  certificates:
+    - certFile: /certs/local.crt
+      keyFile: /certs/local.key
+
+http:
+  middlewares:
+    edge-jwt:
+      forwardAuth:
+        address: "http://server:8082/api/auth/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-Auth-Sub"
+          - "X-Auth-Email"
+          - "X-Auth-Roles"
+
+    rl-auth:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 200
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    rl-api:
+      rateLimit:
+        average: 60
+        period: 1m
+        burst: 120
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    rl-lottery:
+      rateLimit:
+        average: 30
+        period: 1m
+        burst: 60
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    secure-headers:
+      headers:
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+
+  routers:
+    keycloak:
+      rule: "Host(`localhost`) && PathPrefix(`/auth`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - rl-auth
+        - secure-headers
+      service: keycloak
+      tls: {}
+
+    ui:
+      rule: "Host(`localhost`) && PathPrefix(`/`)"
+      entryPoints:
+        - websecure
+      priority: 1
+      middlewares:
+        - secure-headers
+      service: ui
+      tls: {}
+
+    server-api:
+      rule: "Host(`localhost`) && PathPrefix(`/api`)"
+      entryPoints:
+        - websecure
+      priority: 100
+      middlewares:
+        - rl-api
+        - secure-headers
+      service: server
+      tls: {}
+
+  services:
+    keycloak:
+      loadBalancer:
+        servers:
+          - url: "http://auth:8080"
+    ui:
+      loadBalancer:
+        servers:
+          - url: "http://ui:80"
+    server:
+      loadBalancer:
+        servers:
+          - url: "http://server:8082"
