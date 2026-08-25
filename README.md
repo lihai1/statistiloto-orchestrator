@@ -31,11 +31,11 @@ flowchart TB
         DB[(PostgreSQL 16<br/>pgvector<br/>schemas: keycloak · app · lottery · agent)]
     end
 
-    Browser -->|HTTPS| Proxy
+    Browser -->|HTTP (dev) / HTTPS (prod)| Proxy
     Proxy -->|/auth/*| Auth
     Proxy -->|/api/*| Server
     Proxy -->|/| UI
-    Proxy -->|/agent/*| Agent
+    Server -->|HTTP :8000| Agent
     Server -->|gRPC :9090| Lottery
     Agent -->|gRPC :9090| Lottery
     Agent -->|HTTP| Ollama
@@ -80,19 +80,24 @@ cd statistiloto-new
 cp .env.example .env
 # Edit .env — set POSTGRES_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.
 
-# 3. Generate local TLS certs (development only)
+# 3. (Prod/HTTPS only) Generate local TLS certs.
+#    The dev stack (docker-compose.yml) is HTTP-only on :80;
+#    certs are only loaded by docker-compose.prod.yml / traefik.prod.yml.
 cd proxy && ./generate-cert.sh && cd ..
 
 # 4. Build and start the full stack
-docker compose up -d --build
+make up          # or: docker compose up -d --build
 
 # 5. Check health
-docker compose ps
+make ps          # or: docker compose ps
+make wait        # wait until every service is healthy
 ```
 
-Then open **https://localhost/**
+Then open **http://localhost/** (dev stack, HTTP).
 
-> The browser will warn about the self-signed cert. Accept it for local dev.
+> For the production override (`make up-prod` / `docker compose -f
+> docker-compose.yml -f docker-compose.prod.yml up -d`), Traefik enables
+> TLS on :443 — open **https://localhost/** and accept the self-signed cert.
 
 ### Test Users
 
@@ -164,24 +169,26 @@ docker compose up --scale server=2 --scale lottery=2
 - [Flows](docs/FLOWS.md) — mermaid diagrams for all major user flows
 - [Runbook](docs/runbook.md) — operations, troubleshooting, backup & recovery
 - [Plan](docs/PLAN.md) — original architecture plan and implementation steps
+- [UI Screenshot Tour](docs/screenshots/SCREENSHOTS.md) — automated Playwright screenshots of every page
 
 ## Testing
 
+The Makefile wraps the per-service test commands (`make test-go`,
+`make test-java`, `make test-ui`, `make test-agent`, `make test`):
+
 ```bash
-# Go tests
-docker compose exec lottery go test ./...
+# All service unit/integration tests
+make test
 
-# Java tests
-docker compose exec server ./gradlew test
+# Individual services
+make test-go       # docker compose exec lottery go test ./...
+make test-java     # docker compose exec server ./gradlew test
+make test-ui       # docker compose exec ui npm test -- --watch=false
+make test-agent    # docker compose exec agent make test
 
-# Angular tests
-docker compose exec ui npm test
-
-# Playwright E2E
-cd ui && npx playwright test
-
-# Agent tests (unit + integration)
-docker compose exec agent make test
+# Playwright E2E (stack must be running)
+make test-e2e      # cd ui && npx playwright test
+make test-e2e-login
 ```
 
 ## License

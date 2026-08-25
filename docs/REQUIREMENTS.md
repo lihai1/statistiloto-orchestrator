@@ -53,8 +53,10 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 ### Security
 - **NFR-4** TLS termination at Traefik edge proxy; internal traffic is
   plaintext over the private Docker network.
-- **NFR-5** Rate limiting at the edge: `/auth/*` (10 req/s, burst 20),
-  `/api/*` (60 req/s, burst 120), `/lottery/*` (30 req/s, burst 60).
+- **NFR-5** Rate limiting at the edge (per-IP, **per minute**, in
+  `proxy/dynamic.yml`): `/auth/*` (100 avg, 200 burst), `/api/*`
+  (60 avg, 120 burst), `/lottery/*` (30 avg, 60 burst — middleware defined,
+  router not wired by default in dev).
 - **NFR-6** No service shares database tables with another; boundaries
   enforced by PostgreSQL schema isolation.
 - **NFR-7** No passwords stored in application databases — Keycloak owns
@@ -132,7 +134,11 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - pgvector extension for agent embeddings.
 
 ### ollama (Ollama 0.32.5)
-- Local LLM inference (serial: 1 parallel request, 2 loaded models).
+- Local LLM inference. Dev profile: serial (1 parallel request, up to 2 loaded
+  models, queue 64). Prod override tightens to 1 loaded model and queue 16.
+- Default model used by the agent: `qwen2.5:0.5b`
+  (`OLLAMA_MODEL` in `docker-compose.yml`); configurable at runtime by admin
+  via `/api/agent/llm-config`.
 - Used by the agent service in development.
 - Port 11434 (internal).
 

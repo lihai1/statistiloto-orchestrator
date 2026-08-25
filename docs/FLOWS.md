@@ -127,7 +127,7 @@ flowchart TD
     AUTH -->|healthy| SERVER
     LOTTERY -->|healthy| SERVER
     AGENT -->|healthy| SERVER
-    OLLAMA -->|up| AGENT
+    OLLAMA -.->|runtime only (no startup dep)| AGENT
 
     AUTH --> PROXY
     SERVER --> PROXY
@@ -144,7 +144,9 @@ Startup ordering enforced by Compose `depends_on` with `condition: service_healt
 2. **auth** — Keycloak waits for db healthy, imports realm
 3. **lottery** — Go service waits for db healthy, runs Liquibase, starts scraper schedule
 4. **agent** — Python agent waits for db, auth, and lottery healthy
-5. **ollama** — Independent, just needs to be up
+5. **ollama** — Independent; no `depends_on`. The agent calls it at runtime
+   (LLM inference), so it must be up before the first chat request, but Compose
+   does not gate agent startup on it.
 6. **server** — Java BFF waits for db, auth, lottery, and agent all healthy
 7. **ui** — Independent (static files)
 8. **proxy** — Traefik starts last, depends on auth, server, agent, ui

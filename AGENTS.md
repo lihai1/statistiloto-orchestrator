@@ -17,8 +17,11 @@ and a Makefile. All application code lives in submodules.
 | `auth`    | keycloak:25.0                | 8080  | — (realm in `auth/`) | `keycloak` |
 | `db`      | pgvector/pgvector:pg16       | 5432  | — (init in `db/`)  | shared (4 schemas) |
 
-Request flow: Browser → Traefik → (`/` ui, `/api/*` server, `/auth/*` auth, `/agent/*` agent).
-Server → gRPC :9090 → lottery. Agent → gRPC :9090 → lottery, HTTP → ollama, HTTP → server.
+Request flow: Browser → Traefik → (`/` ui, `/api/*` server, `/auth/*` auth).
+The agent is **not** exposed directly by Traefik — the UI reaches it through
+the Java BFF's `/api/agent/*` proxy (HTTP to the agent container on :8000).
+Server → gRPC :9090 → lottery. Agent → gRPC :9090 → lottery, HTTP → ollama,
+HTTP → server (tool calls); Server → HTTP :8000 → agent (chat/approve proxy).
 
 ## Submodules
 
@@ -75,8 +78,9 @@ Do not duplicate protobuf DTO definitions in any service.
 
 ```bash
 cp .env.example .env   # set POSTGRES_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.
-cd proxy && ./generate-cert.sh && cd ..   # local TLS certs
-make up
+make up           # dev stack — HTTP on :80 (no TLS needed)
+# open http://localhost/  (dev)
+# For HTTPS/prod: cd proxy && ./generate-cert.sh && cd ..  then  make up-prod
 # open https://localhost/  (accept self-signed cert)
 ```
 
@@ -99,7 +103,7 @@ Test users (change passwords in production):
 - Submodule commits: edit inside the submodule, commit & push there, then `git add <submodule>` in this repo and commit the pointer bump.
 - Traefik ForwardAuth hits `server`'s `/api/auth/verify` — if server is down, all `/api/*` returns 401 even for valid tokens.
 - WSL: if `docker` fails with permission errors, run once per session: `sudo usermod -aG docker "$(whoami)"` then reopen shell.
-- Prod compose (`docker-compose.prod.yml`) overrides images to pre-built registries; do not assume `build:` is present there.
+- Prod compose (`docker-compose.prod.yml`) is an *override* on top of `docker-compose.yml`: it enables Traefik TLS on :443 (mounting `proxy/certs` + `traefik.prod.yml`/`dynamic.prod.yml`), switches Keycloak to `start` (prod mode), sets `restart: always`, adds `deploy.resources` limits, disables `LOTTERY_SEED_ON_BOOT`, and tightens the Ollama queue. It does **not** swap in pre-built registry images — `build:` contexts are still inherited from the base file.
 
 ## Verification (full-stack feature)
 

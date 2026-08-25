@@ -7,17 +7,21 @@ through the Playwright MCP browser against a live Docker Compose stack.
 
 | Setting | Value |
 |---------|-------|
-| Tool | Playwright MCP (`browser_take_screenshot`, full-page, device scale) |
-| Viewport | **430 × 932** (iPhone 16 Pro Max) |
+| Tool | Playwright MCP (`browser_take_screenshot`, viewport-only, device scale) |
+| Viewport | **430 × 932** (iPhone 16 Pro Max) — fixed, every PNG is exactly this size |
+| Capture mode | `fullPage: false` — only the visible viewport, so the bottom nav + side margins are always visible |
+| Scroll strategy | For pages with results below the fold, scroll the results heading into view before shooting |
 | Theme | Light (default) |
 | Language | Hebrew (default, RTL) |
 | Auth | `admin@statistiloto.local` (USER + ADMIN roles) |
 | Stack | `docker compose up -d` on `http://localhost` |
-| Date | 2026-08-24 |
+| Date | 2026-08-25 |
 
-> The mobile viewport surfaces the bottom-tab navigation bar and the
-> hamburger menu — the desktop sidebar is hidden at this width, which is
-> the intended responsive behavior.
+> All 14 PNGs are exactly 430×932 pixels. The mobile viewport surfaces the
+> bottom-tab navigation bar and the hamburger menu — the desktop sidebar is
+> hidden at this width, which is the intended responsive behavior. Pages
+> taller than the viewport are scrolled to the relevant section before
+> capture so the screenshot shows the feature in context, not the form.
 
 ## Screenshot Flow
 
@@ -124,10 +128,12 @@ page to generate visible data → finish with the admin section.
 ![Saved numbers](09-saved-numbers.png)
 
 - Route: `/saved` (auth-guarded)
-- Aggregates entries saved from Generate, Lucky, and Analyze.
-- Each entry is grouped by category and offers "נתח" (re-analyze via
-  modal) and expand/collapse to inspect the numbers.
-- Infinite-scroll pagination loads more entries as the user scrolls.
+- Aggregates entries saved from Generate, Lucky, and Analyze, grouped
+  by category: "טפסים שהגרלתי" (generated forms), "שכיחות של קבוצות
+  מספרים" (frequency groups), and "מספרי המזל שלי" (lucky numbers).
+- Each category heading shows a count badge. Each entry offers "נתח"
+  (re-analyze via modal) and "מחק" (delete) actions, plus an expand
+  toggle to inspect the numbers.
 
 ### 10. AI Assistant
 
@@ -136,6 +142,11 @@ page to generate visible data → finish with the admin section.
 - Route: `/assistant` (auth-guarded)
 - A chat interface to the Python LangGraph agent, which calls the Go
   lottery service via gRPC and the Java BFF via HTTP.
+- The left sidebar shows **chat session history** — a list of past
+  conversations with message counts and per-session delete buttons,
+  plus a "מחק הכל" (Delete all) button. The tier's session limit is
+  shown at the top ("ללא הגבלה" = unlimited for admin).
+- The main panel shows a welcome message and the chat input.
 - The agent can answer natural-language questions about generated
   forms, statistics, and saved numbers, with human-in-the-loop
   approval for sensitive actions.
@@ -145,8 +156,13 @@ page to generate visible data → finish with the admin section.
 ![Admin LLM config](11-admin-llm-config.png)
 
 - Route: `/admin/llm-config` (ADMIN role only)
-- Edit the active LLM provider, model, temperature, and token limits
-  used by the agent. Changes persist to the `agent.llm_config` table.
+- **Stored configurations** section: lists all saved LLM configs
+  (ollama, gemini, openai providers) with the active one marked
+  "פעיל". Each config has "בדוק חיבור" (Test connection), "הפעל"
+  (Activate), and delete buttons.
+- Edit the active LLM provider, model, base URL, API key, and
+  timeout. Changes persist to the `agent.llm_config` table and
+  hot-reload without restart.
 
 ### 12. Admin — Token Usage
 
@@ -177,21 +193,47 @@ page to generate visible data → finish with the admin section.
 ## Regenerating the Screenshots
 
 The screenshots are produced by driving the Playwright MCP browser
-against a running stack. To reproduce:
+against a running stack. Every PNG is exactly 430×932 (viewport-only,
+`fullPage: false`, `scale: "device"`). To reproduce:
 
 ```bash
-# 1. Start the stack (dev profile)
-make up-dev
+# 1. Start the stack
+make up
 
 # 2. Wait for all services to be healthy
 make wait
 
-# 3. Drive the Playwright MCP browser:
-#    - resize to 430 x 932
-#    - navigate to http://localhost/
-#    - log in as admin@statistiloto.local / admin-password-change-me
-#    - visit each route and capture a full-page device-scale PNG
-#    - save into docs/screenshots/
+# 3. Drive the Playwright MCP browser in this exact order:
+#    a. browser_resize  -> width=430, height=932
+#    b. browser_navigate -> http://localhost/
+#    c. browser_take_screenshot -> 01-home-unauthenticated.png  (fullPage=false, scale=device)
+#    d. click "התחל עכשיו" -> Keycloak login page
+#    e. browser_take_screenshot -> 02-keycloak-login.png
+#    f. click "Sign In" -> redirect back to /
+#    g. browser_take_screenshot -> 03-home-authenticated.png
+#
+#    For each feature page below:
+#      - browser_navigate to the route
+#      - interact (pick balls / set quantity / click compute) to produce visible data
+#      - browser_evaluate to scroll the results heading into view:
+#          document.querySelector('h3').scrollIntoView({block:'start'})
+#        (or scroll to top for pages that fit)
+#      - browser_take_screenshot with fullPage=false, scale=device
+#
+#    Routes in order:
+#      /generate   -> set quantity=3, click "הגרל", scroll to "טפסים שהוגרלו" -> 04
+#      /lucky      -> pick balls 5,10,20, scroll to top                          -> 05
+#      /statistics -> click "חשב", scroll to "קבוצות תכופות"                   -> 06
+#      /analyze    -> pick balls 1,8,15,22,30,37, scroll to "מספרים שנבחרו"     -> 07
+#                     click "נתח", scroll to "שכיחות"                           -> 08
+#      /saved      -> scroll to top                                            -> 09
+#      /assistant  -> scroll to top                                            -> 10
+#      /admin/llm-config  -> scroll to "תצורות שמורות" (h4)                   -> 11
+#      /admin/token-usage -> scroll to top                                     -> 12
+#      /admin/audit-log   -> scroll to top                                     -> 13
+#      /admin/scraper     -> scroll to top                                     -> 14
+#
+# 4. Copy the PNGs from the Playwright output dir into docs/screenshots/
 ```
 
 Files are named `NN-page-description.png` (zero-padded) so they sort
