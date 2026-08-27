@@ -57,7 +57,7 @@ http:
   routers:
     # Keycloak admin/console and OIDC endpoints (no JWT here — login flow).
     keycloak:
-      rule: "Host(`localhost`) && PathPrefix(`/auth`)"
+      rule: "PathPrefix(`/auth`)"
       entryPoints:
         - web
       middlewares:
@@ -67,7 +67,7 @@ http:
 
     # Angular PWA (static, served by the ui container's nginx).
     ui:
-      rule: "Host(`localhost`) && PathPrefix(`/`)"
+      rule: "PathPrefix(`/`)"
       entryPoints:
         - web
       priority: 1
@@ -77,7 +77,7 @@ http:
 
     # Java BFF API.
     server-api:
-      rule: "Host(`localhost`) && PathPrefix(`/api`)"
+      rule: "PathPrefix(`/api`)"
       entryPoints:
         - web
       priority: 100

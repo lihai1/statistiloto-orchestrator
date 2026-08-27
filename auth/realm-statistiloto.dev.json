@@ -1,0 +1,290 @@
+{
+  "realm": "statistiloto",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "roles": {
+    "realm": [
+      {
+        "name": "USER",
+        "description": "Standard Statistiloto user",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Statistiloto administrator",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
+      },
+      {
+        "name": "PAID",
+        "description": "Paid Statistiloto subscriber",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "statistiloto"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "users",
+      "path": "/users"
+    },
+    {
+      "name": "admins",
+      "path": "/admins"
+    },
+    {
+      "name": "paid",
+      "path": "/paid"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "statistiloto-ui",
+      "name": "Statistiloto PWA UI",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "rootUrl": "",
+      "baseUrl": "/",
+      "redirectUris": [
+        "/*",
+        "http://*/*",
+        "https://*/*",
+        "http://localhost/*",
+        "http://localhost",
+        "https://localhost/*",
+        "https://localhost",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1",
+        "https://127.0.0.1/*",
+        "https://127.0.0.1"
+      ],
+      "webOrigins": [
+        "http://localhost",
+        "http://localhost:4200",
+        "https://localhost",
+        "https://localhost:4200",
+        "http://127.0.0.1",
+        "http://127.0.0.1:4200",
+        "https://127.0.0.1",
+        "https://127.0.0.1:4200",
+        "https://*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost/*,http://127.0.0.1/*,http://*/*,https://localhost/*,https://127.0.0.1/*,https://*/*"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-statistiloto-ui",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "statistiloto-ui",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "false",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "statistiloto-server",
+      "name": "Statistiloto Java BFF",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "secret": "${env.STATISTILOTO_SERVER_CLIENT_SECRET}",
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "openid",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "group-membership",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "full.path": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    },
+    {
+      "name": "web-origins",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@statistiloto.local",
+      "enabled": true,
+      "email": "admin@statistiloto.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Statistiloto",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin-password-change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER",
+        "ADMIN"
+      ],
+      "groups": [
+        "/admins"
+      ]
+    },
+    {
+      "username": "user@statistiloto.local",
+      "enabled": true,
+      "email": "user@statistiloto.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-password-change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ],
+      "groups": [
+        "/users"
+      ]
+    },
+    {
+      "username": "paid@statistiloto.local",
+      "enabled": true,
+      "email": "paid@statistiloto.local",
+      "emailVerified": true,
+      "firstName": "Paid",
+      "lastName": "Subscriber",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "paid-password-change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER",
+        "PAID"
+      ],
+      "groups": [
+        "/users",
+        "/paid"
+      ]
+    }
+  ]
+}

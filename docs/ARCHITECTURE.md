@@ -44,8 +44,8 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 | `proxy`  | Traefik v3.2          | Edge routing, TLS (prod), rate limiting, ForwardAuth | 80 (dev), 443 (prod) |
 | `ui`     | Angular 20 PWA + Nginx| Static UI                              | 80 (internal)|
 | `server` | Spring Boot 3.5 / Java 21 | App data (`app` schema), BFF REST, agent proxy | 8082     |
-| `lottery`| Go 1.25               | Lottery results + algorithm (`lottery` schema) | 8080, 9090 |
-| `agent`  | Python 3.12 / LangGraph | Agent data (`agent` schema): `token_usage`, `audit_log`, `llm_config`, pgvector `embeddings` | 8000 (internal) |
+| `lottery`| Go 1.25               | Lottery results + algorithm + Simulate backtest (`lottery` schema, incl. `prize_amounts`) | 8080, 9090 |
+| `agent`  | Python 3.12 / LangGraph | Agent data (`agent` schema): `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, pgvector `embeddings`; free-tier LLM toggle | 8000 (internal) |
 | `ollama` | Ollama 0.32.5         | Local LLM inference (serial)           | 11434 (internal) |
 | `auth`   | Keycloak 25           | Identity, JWT issuance (`keycloak` schema) | 8080 (internal) |
 | `db`     | PostgreSQL 16 + pgvector | Shared instance, four logical schemas | 5432         |
@@ -59,9 +59,11 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 
 - **Keycloak** owns identity/authentication data (`keycloak` schema).
 - **Java BFF** owns application data: saved numbers, user profiles (`app` schema).
-- **Go service** owns lottery historical results and computation (`lottery` schema).
+- **Go service** owns lottery historical results and computation (`lottery` schema):
+  `lottery_results` (including the `prize_amounts` JSONB column populated by the
+  prize scraper, used by Simulate for real per-draw prize data).
 - **Python agent** owns LLM telemetry and RAG state (`agent` schema):
-  `token_usage`, `audit_log`, `llm_config`, and pgvector `embeddings`.
+  `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, and pgvector `embeddings`.
 - No service shares tables with another. Boundaries are enforced by schema.
 
 ## Authentication Flow
@@ -80,7 +82,8 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 ## Communication
 
 - **Angular → Java**: REST over HTTP (dev) / HTTPS (prod), through Traefik.
-- **Java → Go**: gRPC (shared `proto/lottery.proto`).
+- **Java → Go**: gRPC (shared `proto/lottery.proto`): GenerateForm, GetStatistics,
+  Analyze, Simulate.
 - **Java → Agent**: HTTP (`/api/agent/*` proxy, SSE passthrough for chat).
 - **Agent → Go**: gRPC (shared `proto/lottery.proto`, lottery tools).
 - **Agent → Ollama**: HTTP (local LLM inference).

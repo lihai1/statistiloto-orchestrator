@@ -92,7 +92,8 @@ Test users (change passwords in production):
 ## Directory map
 
 - `proxy/` — Traefik static + dynamic config, cert generation script.
-- `auth/realm-statistiloto.json` — Keycloak realm export (clients, users, roles).
+- `auth/realm-statistiloto.dev.json` — Keycloak realm for dev (open redirect URIs, `http://*/*`).
+- `auth/realm-statistiloto.prod.json` — Keycloak realm for prod (locked to `https://statistiloto.example.com`, `sslRequired: external`). **Edit the placeholder domain before deploying.**
 - `db/init-schemas.sh` + `db/init.sql` — creates 4 schemas (`keycloak`, `app`, `lottery`, `agent`).
 - `docs/` — ARCHITECTURE.md, API.md, FLOWS.md, REQUIREMENTS.md, runbook.md, PLAN.md.
 

@@ -41,7 +41,7 @@ docker compose logs -f
 
 - Admin console: `http://localhost/auth/admin` (dev) / `https://localhost/auth/admin` (prod)
 - Credentials: from `.env` (`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`)
-- Realm `statistiloto` is imported on first boot from `auth/realm-statistiloto.json`
+- Realm `statistiloto` is imported on first boot from `auth/realm-statistiloto.dev.json` (dev) or `auth/realm-statistiloto.prod.json` (prod)
 - Test users (defined in the realm import — change passwords in production):
   - `admin@statistiloto.local` / `admin-password-change-me` — USER, ADMIN
   - `user@statistiloto.local`  / `user-password-change-me`  — USER (free)
@@ -104,7 +104,7 @@ make scale-server N=3      # one service to N
 ## Troubleshooting
 
 ### Keycloak realm not imported
-- Ensure `auth/realm-statistiloto.json` is mounted.
+- Ensure `auth/realm-statistiloto.dev.json` (dev) or `auth/realm-statistiloto.prod.json` (prod) is mounted.
 - Check `docker compose logs auth`.
 
 ### JWT validation fails

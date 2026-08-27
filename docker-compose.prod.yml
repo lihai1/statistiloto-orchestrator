@@ -30,6 +30,8 @@ services:
   auth:
     command: ["start", "--import-realm", "--http-relative-path=/auth", "--features=hostname:v1"]
     restart: always
+    volumes:
+      - ./auth/realm-statistiloto.prod.json:/opt/keycloak/data/import/realm-statistiloto.json:ro
 
   # ── Go lottery service ──────────────────────────────────────────
   lottery:

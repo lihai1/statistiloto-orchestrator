@@ -69,6 +69,24 @@ Each service owns its own PostgreSQL schema — no shared tables, boundaries enf
 - **Go service** (`lottery`) — `lottery_results` table (historical draws, scraper-managed).
 - **Python agent** (`agent`) — `token_usage`, `audit_log`, `llm_config`, `embeddings` (pgvector).
 
+## Features
+
+- **Generate** — tree-based lottery number combinations from historical-draw patterns.
+- **Lucky Numbers** — willBe front-loading via ReGroup.
+- **Statistics** — frequent number pairs/groups over a configurable date range.
+- **Analyze** — frequency groups and historical matches for user-selected numbers.
+- **Simulate** — backtest a ticket (6/8/10/12-number systematic forms) against every
+  historical draw in an archive window: lifetime spend vs. winnings, per-tier hit
+  counts, and per-draw results. Prize amounts use scraped per-draw data when
+  available (`lottery_results.prize_amounts`), falling back to defaults or
+  user-supplied overrides.
+- **Saved Numbers** — per-user CRUD for generated/favorite sets.
+- **AI Assistant** — LangGraph agent (SSE streaming) with lottery tools, RAG, and
+  human-in-the-loop approval on write tools. Per-request LLM override
+  (`config_id`) and language hint (`lang`) on chat.
+- **Admin** — runtime LLM configuration (stored configs CRUD + activate/test),
+  free-tier LLM toggle, token usage, audit log, scraper control, RAG reindex.
+
 ## Quick Start
 
 ```bash
@@ -95,9 +113,19 @@ make wait        # wait until every service is healthy
 
 Then open **http://localhost/** (dev stack, HTTP).
 
+> The dev stack is reachable from any host that can route to the Docker host —
+> including LAN IPs (e.g. `http://192.168.1.140/`) and Devin browser previews.
+> Traefik's dev `dynamic.yml` routes by path prefix (not `Host`), and Keycloak
+> runs with `KC_HOSTNAME_STRICT: false` so it resolves its hostname from the
+> incoming request. The dev realm (`auth/realm-statistiloto.dev.json`) allows
+> `http://*/*` and `https://*/*` redirect URIs for this reason.
+
 > For the production override (`make up-prod` / `docker compose -f
 > docker-compose.yml -f docker-compose.prod.yml up -d`), Traefik enables
 > TLS on :443 — open **https://localhost/** and accept the self-signed cert.
+> The prod realm (`auth/realm-statistiloto.prod.json`) locks `redirectUris` to
+> `https://statistiloto.example.com/*` and sets `sslRequired: external` —
+> **edit the placeholder domain before deploying.**
 
 ### Test Users
 
@@ -146,12 +174,16 @@ git commit -m "bump lottery-stats-server submodule"
 ### Shared protobuf contract
 
 The `proto/lottery.proto` file is the single source of truth for the gRPC contract
-between the Java BFF and the Go lottery service. When changing it:
+between the Java BFF, the Go lottery service, and the Python agent. When changing it:
 
-1. Regenerate Go stubs: `docker compose exec lottery make proto`
-2. Regenerate Java stubs: `docker compose exec server ./gradlew generateProto`
-3. Update both service implementations.
-4. Run tests for both services.
+1. `make proto-go`   — regenerate Go stubs in `lottery-stats-server/pkg/gen/`.
+2. `make proto-java`  — regenerate Java stubs in `server/build/generated/`.
+3. Regenerate agent Python stubs (see `agent/AGENTS.md`).
+4. Update all three implementations (`server`, `lottery-stats-server`, `agent`).
+5. `make test-go && make test-java && make test-agent`.
+
+> `make proto` runs steps 1–2 together. Do not duplicate protobuf DTO definitions
+> in any service.
 
 ### Scaling
 

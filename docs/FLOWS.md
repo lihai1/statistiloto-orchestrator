@@ -182,7 +182,36 @@ sequenceDiagram
 
 ---
 
-## 6. Saved Numbers CRUD Flow
+## 6. Simulate (Backtest) Flow
+
+```mermaid
+sequenceDiagram
+    participant U as Browser / PWA
+    participant P as Traefik
+    participant J as Java BFF
+    participant G as Go Lottery Service
+    participant DB as PostgreSQL (lottery schema)
+
+    U->>P: POST /api/generate/simulate { form, strong, from, to, ticketCost, prizeAmounts }
+    P->>J: ForwardAuth + forward
+    J->>J: Validate JWT, extract user_sub
+    J->>G: gRPC Simulate(SimulateRequest)
+    G->>DB: SELECT * FROM lottery.lottery_results WHERE date_range
+    DB-->>G: Historical draws (incl. prize_amounts)
+    G->>G: For each draw: enumerate C(N,6) combinations, score tier hits
+    G->>G: Use draw.prize_amounts when present (used_real_prizes=true), else defaults/overrides
+    G-->>J: SimulateResponse { draws[], summary }
+    J-->>P: JSON response
+    P-->>U: 200 OK { draws, summary }
+```
+
+> For systematic forms (8/10/12 numbers), every C(N,6) combination is played per
+> draw, so a single draw can hit multiple prize tiers. `summary.drawsWithRealPrizes`
+> counts draws priced from scraped per-draw data vs. defaults/overrides.
+
+---
+
+## 7. Saved Numbers CRUD Flow
 
 ```mermaid
 sequenceDiagram

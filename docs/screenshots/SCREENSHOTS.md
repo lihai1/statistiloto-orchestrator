@@ -15,9 +15,9 @@ through the Playwright MCP browser against a live Docker Compose stack.
 | Language | Hebrew (default, RTL) |
 | Auth | `admin@statistiloto.local` (USER + ADMIN roles) |
 | Stack | `docker compose up -d` on `http://localhost` |
-| Date | 2026-08-25 |
+| Date | 2026-08-26 |
 
-> All 14 PNGs are exactly 430×932 pixels. The mobile viewport surfaces the
+> All 16 PNGs are exactly 430×932 pixels. The mobile viewport surfaces the
 > bottom-tab navigation bar and the hamburger menu — the desktop sidebar is
 > hidden at this width, which is the intended responsive behavior. Pages
 > taller than the viewport are scrolled to the relevant section before
@@ -35,7 +35,7 @@ page to generate visible data → finish with the admin section.
 
 - Route: `/`
 - The landing page shows the app title, tagline, and two CTAs
-  ("התחבר" / login, "הרשמה" / register).
+  ("התחל עכשיו" / start now, "הרשמה" / register).
 - The sidebar (hidden on mobile) is replaced by bottom tabs once
   authenticated; here only the header and hero are visible.
 - No data has been generated yet.
@@ -45,7 +45,7 @@ page to generate visible data → finish with the admin section.
 ![Keycloak login](02-keycloak-login.png)
 
 - Route: `/auth/realms/statistiloto/protocol/openid-connect/auth?...`
-- Triggered by clicking "התחבר" on the home page.
+- Triggered by clicking "התחל עכשיו" on the home page.
 - Keycloak renders its hosted login form (English UI by default).
 - The admin email is pre-filled by the browser; password field is
   populated before clicking "Sign In".
@@ -58,10 +58,10 @@ page to generate visible data → finish with the admin section.
 
 - Route: `/` (post-login)
 - The hero CTAs are replaced with feature links: Generate, Lucky
-  Numbers, Statistics, Analyze, Saved Numbers, and "Ask the AI
+  Numbers, Statistics, Analyze, Simulate, Saved Numbers, and "Ask the AI
   Assistant".
 - The bottom-tab bar now appears (mobile): Home, Generate, Assistant,
-  Statistics, Admin.
+  Statistics, Admin (admin role replaces the Saved tab for admins).
 - The floating AI-assistant button is visible at the bottom-right.
 
 ### 4. Generate — Forms Produced
@@ -123,9 +123,42 @@ page to generate visible data → finish with the admin section.
 - Each group is collapsible; entries list the matching historical draws.
 - A "save" action persists the selected entry to the Saved Numbers page.
 
-### 9. Saved Numbers
+### 9. Simulate — Loaded
 
-![Saved numbers](09-saved-numbers.png)
+![Simulate loaded](09-simulate-loaded.png)
+
+- Route: `/simulate` (auth-guarded)
+- The simulation page on first load, before any numbers are picked or
+  simulation run.
+- Controls visible: a "טען מספרים שמורים" (load saved numbers) tray
+  listing previously saved sets, archive date range, form size
+  (6 / 8 / 10 / 12), ticket cost (₪), a 37-ball picker (empty —
+  "מספרים שנבחרו (0/6)"), a strong-number picker (1–7), and a
+  collapsible "הגדרת סכומי פרסים" (prize amounts) panel.
+- The "הרץ סימולציה" button is disabled until enough numbers are
+  selected.
+
+### 10. Simulate — Results
+
+![Simulate with results](10-simulate-with-results.png)
+
+- Route: `/simulate` (after clicking "הרץ סימולציה")
+- Backtest a chosen ticket against every historical draw in the archive
+  window to see lifetime spend vs. winnings.
+- The screenshot shows a saved set (1, 8, 11, 21, 25, 26) loaded with
+  strong number 3, then "הרץ סימולציה" clicked. The "תוצאות סימולציה"
+  section renders:
+  - Summary cards: מספר הגרלות (total draws), סה"כ הוצאה (total spent),
+    סה"כ זכייה (total won), רווח/הפסד נטו (net), and פרסים אמיתיים
+    (draws priced with real historical prizes vs. estimates).
+  - "סיכום לפי דרגת זכייה" tier table (6+strong down to 3) with hit
+    counts and amounts.
+  - "היסטוריית הגרלות" draw-by-draw table with winning numbers, strong
+    number, tier hit, prize, cost, and a real/estimate prize-source badge.
+
+### 11. Saved Numbers
+
+![Saved numbers](11-saved-numbers.png)
 
 - Route: `/saved` (auth-guarded)
 - Aggregates entries saved from Generate, Lucky, and Analyze, grouped
@@ -135,9 +168,9 @@ page to generate visible data → finish with the admin section.
   (re-analyze via modal) and "מחק" (delete) actions, plus an expand
   toggle to inspect the numbers.
 
-### 10. AI Assistant
+### 12. AI Assistant
 
-![Assistant](10-assistant.png)
+![Assistant](12-assistant.png)
 
 - Route: `/assistant` (auth-guarded)
 - A chat interface to the Python LangGraph agent, which calls the Go
@@ -151,39 +184,51 @@ page to generate visible data → finish with the admin section.
   forms, statistics, and saved numbers, with human-in-the-loop
   approval for sensitive actions.
 
-### 11. Admin — LLM Configuration
+### 13. Admin — LLM Configuration
 
-![Admin LLM config](11-admin-llm-config.png)
+![Admin LLM config](13-admin-llm-config.png)
 
 - Route: `/admin/llm-config` (ADMIN role only)
 - **Stored configurations** section: lists all saved LLM configs
   (ollama, gemini, openai providers) with the active one marked
-  "פעיל". Each config has "בדוק חיבור" (Test connection), "הפעל"
-  (Activate), and delete buttons.
+  "פעיל". Each config card header has aligned action buttons —
+  "בדוק חיבור" (Test connection), "הפעל" (Activate), and a trash-icon
+  delete — all rendered at the same height via flexbox with a fixed
+  `min-height`. The "בדוק חיבור" button wraps to two lines to fit the
+  narrow mobile width.
+- The **Edit** button is inside the expandable card details — click a
+  config card to expand it, then click "ערוך" to load that config into
+  the edit form below.
 - Edit the active LLM provider, model, base URL, API key, and
   timeout. Changes persist to the `agent.llm_config` table and
   hot-reload without restart.
 
-### 12. Admin — Token Usage
+### 14. Admin — Token Usage
 
-![Admin token usage](12-admin-token-usage.png)
+![Admin token usage](14-admin-token-usage.png)
 
 - Route: `/admin/token-usage` (ADMIN role only)
-- Per-user token consumption broken down by model and day, sourced
-  from the `agent.token_usage` table. Useful for cost tracking and
-  quota enforcement.
+- Per-user token consumption table, sourced from the
+  `agent.token_usage` table. Columns: User, Tier, Prompt tokens,
+  Completion tokens, Cost, Model (model is last so the user/tier
+  columns stay visible on narrow screens). The user column shows the
+  Keycloak email (resolved via `keycloak.user_entity` join) rather
+  than the opaque JWT `sub`. Useful for cost tracking and quota
+  enforcement.
 
-### 13. Admin — Audit Log
+### 15. Admin — Audit Log
 
-![Admin audit log](13-admin-audit-log.png)
+![Admin audit log](15-admin-audit-log.png)
 
 - Route: `/admin/audit-log` (ADMIN role only)
 - Chronological list of agent actions (including HITL approvals,
-  tool calls, and errors) from the `agent.audit_log` table.
+  tool calls, and errors) from the `agent.audit_log` table. The user
+  column shows the Keycloak email (resolved via `keycloak.user_entity`
+  join) rather than the opaque JWT `sub`.
 
-### 14. Admin — Scraper Control
+### 16. Admin — Scraper Control
 
-![Admin scraper](14-admin-scraper.png)
+![Admin scraper](16-admin-scraper.png)
 
 - Route: `/admin/scraper` (ADMIN role only)
 - Manual control of the Israeli-lottery scraper: trigger an immediate
@@ -226,12 +271,15 @@ make wait
 #      /statistics -> click "חשב", scroll to "קבוצות תכופות"                   -> 06
 #      /analyze    -> pick balls 1,8,15,22,30,37, scroll to "מספרים שנבחרו"     -> 07
 #                     click "נתח", scroll to "שכיחות"                           -> 08
-#      /saved      -> scroll to top                                            -> 09
-#      /assistant  -> scroll to top                                            -> 10
-#      /admin/llm-config  -> scroll to "תצורות שמורות" (h4)                   -> 11
-#      /admin/token-usage -> scroll to top                                     -> 12
-#      /admin/audit-log   -> scroll to top                                     -> 13
-#      /admin/scraper     -> scroll to top                                     -> 14
+#      /simulate   -> scroll to top (page on first load)                        -> 09
+#                     click a saved set, pick strong=3, click "הרץ סימולציה",
+#                     scroll to "תוצאות סימולציה"                                -> 10
+#      /saved      -> scroll to top                                            -> 11
+#      /assistant  -> scroll to top                                            -> 12
+#      /admin/llm-config  -> scroll to "תצורות שמורות" (h4)                   -> 13
+#      /admin/token-usage -> scroll to top                                     -> 14
+#      /admin/audit-log   -> scroll to top                                     -> 15
+#      /admin/scraper     -> scroll to top                                     -> 16
 #
 # 4. Copy the PNGs from the Playwright output dir into docs/screenshots/
 ```

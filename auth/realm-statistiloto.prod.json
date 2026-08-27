@@ -1,7 +1,7 @@
 {
   "realm": "statistiloto",
   "enabled": true,
-  "sslRequired": "none",
+  "sslRequired": "external",
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
@@ -67,22 +67,18 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "authorizationServicesEnabled": false,
-      "rootUrl": "http://localhost",
+      "rootUrl": "",
       "baseUrl": "/",
       "redirectUris": [
-        "/*",
-        "http://localhost/*",
-        "http://localhost",
-        "http://127.0.0.1/*",
-        "http://127.0.0.1"
+        "https://statistiloto.example.com/*",
+        "https://statistiloto.example.com"
       ],
       "webOrigins": [
-        "http://localhost",
-        "http://127.0.0.1"
+        "https://statistiloto.example.com"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost/*"
+        "post.logout.redirect.uris": "https://statistiloto.example.com/*"
       },
       "defaultClientScopes": [
         "openid",

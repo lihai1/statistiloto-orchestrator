@@ -17,6 +17,7 @@ Traefik. The UI never calls the Go service directly.
 | `/api/generate/form`        | POST   | Yes  | Generate lottery number combinations. |
 | `/api/generate/statistics`  | POST   | Yes  | Calculate frequent pairs/groups.     |
 | `/api/generate/analyze`     | POST   | Yes  | Analyze user-selected numbers.       |
+| `/api/generate/simulate`    | POST   | Yes  | Backtest a ticket against historical draws. |
 
 ### POST /api/generate/form
 
@@ -77,6 +78,66 @@ Response:
 }
 ```
 
+### POST /api/generate/simulate
+
+Backtest a user's ticket against every historical draw in the archive window.
+Supports systematic forms (6, 8, 10, or 12 numbers) — for N > 6, all C(N,6)
+combinations are played per draw.
+
+```json
+{
+  "form": [1, 8, 11, 21, 25, 26],
+  "strong": 3,
+  "from": "2024-01-01",
+  "to": "2024-12-31",
+  "ticketCost": 3.0,
+  "prizeAmounts": []
+}
+```
+
+| Field           | Type             | Required | Notes                                                    |
+|-----------------|------------------|----------|----------------------------------------------------------|
+| `form`          | `number[]`       | yes      | 6, 8, 10, or 12 numbers (systematic forms).             |
+| `strong`        | `number`         | no       | Strong number 1–7. `0`/omitted = no strong number.       |
+| `from`/`to`     | `date` (ISO)     | no       | Historical window. Omit = full archive.                  |
+| `ticketCost`    | `number`         | no       | Ticket cost per combination (ILS). Default 3.0.          |
+| `prizeAmounts`  | `number[]`       | no       | Length 0 or 8. Per-tier prize overrides (ILS). Index 0 = tier 1 (6+strong) … 7 = tier 8 (3). |
+
+Response:
+```json
+{
+  "draws": [
+    {
+      "drawNumber": 1234,
+      "drawDate": "2024-03-15",
+      "winningNumbers": [3, 11, 21, 29, 34, 37],
+      "winningStrong": 5,
+      "tierHits": [
+        { "tier": 4, "hits": 1, "amountPerHit": 50.0, "total": 50.0 }
+      ],
+      "prizeWon": 50.0,
+      "ticketCost": 3.0,
+      "usedRealPrizes": true
+    }
+  ],
+  "summary": {
+    "totalDraws": 312,
+    "totalCombinations": 312,
+    "totalSpent": 936.0,
+    "totalWon": 142.0,
+    "net": -794.0,
+    "tierSummaries": [
+      { "tier": 1, "label": "6+strong", "totalHits": 0, "totalAmount": 0.0 }
+    ],
+    "drawsWithRealPrizes": 280
+  }
+}
+```
+
+> `usedRealPrizes` / `drawsWithRealPrizes` reflect whether the prize amounts came
+> from the scraped per-draw data (`lottery_results.prize_amounts`, populated by the
+> prize scraper) rather than service defaults or user-supplied overrides.
+
 ## Saved Numbers (owned by Java BFF)
 
 | Endpoint                    | Method | Auth | Description                          |
@@ -122,9 +183,20 @@ the agent's JSON; admin endpoints are gated by the `ADMIN` role
   "session_id": "abc-123",
   "message": "Generate a strong form for the last 6 months",
   "intent": "generate",
-  "context": { "formType": 1 }
+  "context": { "formType": 1 },
+  "config_id": 2,
+  "lang": "he"
 }
 ```
+
+| Field        | Type     | Notes                                                              |
+|--------------|----------|--------------------------------------------------------------------|
+| `session_id` | string   | Required. LangGraph thread id; reused across chat + approve.       |
+| `message`    | string   | Required. User utterance.                                          |
+| `intent`     | string   | Optional hint for the supervisor router.                           |
+| `context`    | object   | Optional structured UI context (page, selected numbers, groupSize).|
+| `config_id`  | integer  | Optional. Override the active LLM with a stored config for this request only. |
+| `lang`       | string   | Optional. Language hint (`he` / `en`) forwarded to workers.        |
 
 Response (normal completion):
 
@@ -169,10 +241,13 @@ All endpoints below require the `ADMIN` role.
 | `/api/agent/llm-config`                   | PUT    | Update the active LLM configuration.                    |
 | `/api/agent/llm-configs`                  | GET    | List all stored LLM configurations.                     |
 | `/api/agent/llm-configs`                  | POST   | Create a new stored LLM configuration.                  |
+| `/api/agent/llm-configs/{configId}`       | PUT    | Update a stored configuration (name, provider, model, base_url, api_key, timeout). |
 | `/api/agent/llm-configs/{configId}/activate` | PUT | Activate a stored configuration by id.                  |
 | `/api/agent/llm-configs/{configId}/test`  | POST   | Smoke-test a stored configuration.                      |
 | `/api/agent/llm-configs/{configId}`       | DELETE | Delete a stored configuration.                          |
-| `/api/agent/llm-models?provider=ollama`   | GET    | List models available from a provider.                  |
+| `/api/agent/llm-models?provider=ollama&base_url=...` | GET | List models available from a provider (optional `base_url` to query a non-default endpoint). |
+| `/api/agent/free-llm`                     | GET    | Read the free-tier LLM toggle (whether free users get LLM or a canned response). |
+| `/api/agent/free-llm`                     | PUT    | Set the free-tier LLM toggle (`{ "enabled": true }`).   |
 | `/api/agent/token-usage`                  | GET    | Per-user token consumption (from `agent.token_usage`).  |
 | `/api/agent/audit-log?limit=50`           | GET    | Agent action history (from `agent.audit_log`).          |
 | `/api/agent/reindex`                      | POST   | Rebuild the pgvector RAG embeddings.                    |

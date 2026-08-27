@@ -16,6 +16,12 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - **FR-3** Analyze user-selected numbers against historical winning draws,
   returning frequency groups and match details.
 - **FR-4** Generate "lucky" numbers (willBe front-loading via ReGroup).
+- **FR-4a** Simulate (backtest) a user's ticket against every historical draw in
+  an archive window. Supports systematic forms (6, 8, 10, 12 numbers) where all
+  C(N,6) combinations are played per draw. Returns per-draw results (tier hits,
+  prize won, ticket cost, real-vs-estimated prize badge) and an aggregated
+  summary (total draws, spend, winnings, net, per-tier totals, draws priced with
+  real scraped prizes).
 
 ### User Data
 - **FR-5** Save and manage generated/favorite number sets per user account
@@ -25,8 +31,10 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 ### AI Agent
 - **FR-7** Chat with an AI assistant (SSE streaming) that can call lottery
   tools, retrieve RAG context, and trigger writes with human approval (HITL).
-- **FR-8** Admin operations: configure LLM at runtime, trigger scraper,
-  view audit log, view token usage.
+  Per-request LLM override (`config_id`) and language hint (`lang`).
+- **FR-8** Admin operations: configure LLM at runtime (stored configs CRUD +
+  activate/test), toggle free-tier LLM access, trigger scraper, view audit log,
+  view token usage, reindex RAG.
 
 ### Authentication
 - **FR-9** Users log in via Keycloak (OIDC authorization-code + PKCE).
@@ -36,7 +44,9 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 
 ### Data Freshness
 - **FR-12** Scheduled scraper refreshes `lottery_results` from the Israeli
-  lottery site (pais.co.il) on a cron schedule (default: daily 03:00).
+  lottery site (pais.co.il) on a cron schedule (default: daily 03:00). The
+  prize scraper also populates the `prize_amounts` JSONB column (per-tier ILS
+  prizes per draw) used by Simulate for real per-draw prize data.
 - **FR-13** Seed from `lotto.data` on first boot if the table is empty.
 
 ---
@@ -103,9 +113,12 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 ### lottery (Go 1.25)
 - gRPC + gRPC-Gateway (REST).
 - Tree-based LotteryArray algorithm (ported from Java, behavior preserved).
+- Simulate RPC — backtests a ticket against historical draws, using scraped
+  per-draw `prize_amounts` when available (falls back to defaults or
+  user-supplied overrides).
 - Stateless beyond `lottery_results` table.
 - Keycloak JWT validation (defense-in-depth, RS256/JWKS).
-- Scheduled scraper + seeder.
+- Scheduled scraper + seeder (draws + prize amounts).
 - Owns `lottery` schema (Liquibase).
 - Ports 8080 (REST gateway), 9090 (gRPC).
 
@@ -113,8 +126,13 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - FastAPI with SSE streaming.
 - Supervisor graph → 3 workers (nl_assistant, analyst, admin_ops).
 - RAG with pgvector (role-scoped, per-tenant).
-- HITL on write tools (save_numbers, trigger_scraper).
+- HITL on write tools (save_numbers, trigger_scraper, edit_file).
+- Free-tier LLM toggle (admin-controlled via `/api/agent/free-llm`) — when
+  disabled, free-tier users get a canned response instead of an LLM call.
+- Per-request LLM override (`config_id` on `/chat`) for admin testing.
 - Token metering (agent.token_usage).
+- Chat sessions indexed in `agent.chat_sessions` (tier-based retention:
+  free=1, paid=15, admin=unlimited).
 - gRPC to Go lottery, HTTP to Java BFF.
 - Owns `agent` schema (pgvector).
 - Port 8000.
