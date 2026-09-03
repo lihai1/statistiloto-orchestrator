@@ -32,6 +32,7 @@ services:
     restart: always
     volumes:
       - ./auth/realm-statistiloto.prod.json:/opt/keycloak/data/import/realm-statistiloto.json:ro
+      - ./auth/themes:/opt/keycloak/themes:ro
 
   # ── Go lottery service ──────────────────────────────────────────
   lottery:

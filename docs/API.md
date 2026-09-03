@@ -5,19 +5,19 @@ Traefik. The UI never calls the Go service directly.
 
 ## Authentication
 
-| Endpoint             | Method | Auth | Description                          |
-|----------------------|--------|------|--------------------------------------|
+| Endpoint             | Method | Auth | Description                                                           |
+|----------------------|--------|------|-----------------------------------------------------------------------|
 | `/api/auth/verify`   | GET    | No   | Traefik ForwardAuth target. Returns 200 if the Bearer token is valid. |
-| `/api/me`            | GET    | Yes  | Returns the authenticated user's profile. |
+| `/api/me`            | GET    | Yes  | Returns the authenticated user's profile.                             |
 
 ## Lottery Computation (proxied to Go via gRPC)
 
-| Endpoint                    | Method | Auth | Description                          |
-|-----------------------------|--------|------|--------------------------------------|
-| `/api/generate/form`        | POST   | Yes  | Generate lottery number combinations. |
-| `/api/generate/statistics`  | POST   | Yes  | Calculate frequent pairs/groups.     |
-| `/api/generate/analyze`     | POST   | Yes  | Analyze user-selected numbers.       |
-| `/api/generate/simulate`    | POST   | Yes  | Backtest a ticket against historical draws. |
+| Endpoint                    | Method | Auth | Description                                    |
+|-----------------------------|--------|------|------------------------------------------------|
+| `/api/generate/form`        | POST   | Yes  | Generate lottery number combinations.          |
+| `/api/generate/statistics`  | POST   | Yes  | Calculate frequent pairs/groups.               |
+| `/api/generate/analyze`     | POST   | Yes  | Analyze user-selected numbers.                 |
+| `/api/generate/simulate`    | POST   | Yes  | Backtest a ticket against historical draws.    |
 
 ### POST /api/generate/form
 
@@ -33,6 +33,7 @@ Traefik. The UI never calls the Go service directly.
 ```
 
 Response:
+
 ```json
 {
   "forms": [[1, 5, 12, 23, 34, 41]]
@@ -50,6 +51,7 @@ Response:
 ```
 
 Response:
+
 ```json
 {
   "pairs": [
@@ -69,6 +71,7 @@ Response:
 ```
 
 Response:
+
 ```json
 {
   "frequency": { "1": 15, "2": 8 },
@@ -95,15 +98,16 @@ combinations are played per draw.
 }
 ```
 
-| Field           | Type             | Required | Notes                                                    |
-|-----------------|------------------|----------|----------------------------------------------------------|
-| `form`          | `number[]`       | yes      | 6, 8, 10, or 12 numbers (systematic forms).             |
-| `strong`        | `number`         | no       | Strong number 1–7. `0`/omitted = no strong number.       |
-| `from`/`to`     | `date` (ISO)     | no       | Historical window. Omit = full archive.                  |
-| `ticketCost`    | `number`         | no       | Ticket cost per combination (ILS). Default 3.0.          |
-| `prizeAmounts`  | `number[]`       | no       | Length 0 or 8. Per-tier prize overrides (ILS). Index 0 = tier 1 (6+strong) … 7 = tier 8 (3). |
+| Field           | Type             | Required | Notes                                                                |
+|-----------------|------------------|----------|----------------------------------------------------------------------|
+| `form`          | `number[]`       | yes      | 6, 8, 10, or 12 numbers (systematic forms).                          |
+| `strong`        | `number`         | no       | Strong number 1–7. `0`/omitted = no strong number.                   |
+| `from`/`to`     | `date` (ISO)     | no       | Historical window. Omit = full archive.                              |
+| `ticketCost`    | `number`         | no       | Ticket cost per combination (ILS). Default 3.0.                      |
+| `prizeAmounts`  | `number[]`       | no       | Len 0/8. Per-tier ILS overrides. 0=tier 1 (6+strong) … 7=tier 8 (3). |
 
 Response:
+
 ```json
 {
   "draws": [
@@ -169,6 +173,7 @@ the agent's JSON; admin endpoints are gated by the `ADMIN` role
 | Endpoint                              | Method | Auth   | Description                                      |
 |---------------------------------------|--------|--------|--------------------------------------------------|
 | `/api/agent/chat`                     | POST   | Yes    | Send a message to the agent (may pause for HITL).|
+| `/api/agent/chat/stream`              | POST   | Yes    | SSE streaming variant of `/chat` (text/event-stream). |
 | `/api/agent/approve`                  | POST   | Yes    | Approve/reject a paused write-tool action.       |
 | `/api/agent/health`                   | GET    | No     | Proxied agent liveness (`/healthz` on agent).    |
 | `/api/agent/sessions`                 | GET    | Yes    | List the caller's agent sessions.                |
@@ -189,14 +194,14 @@ the agent's JSON; admin endpoints are gated by the `ADMIN` role
 }
 ```
 
-| Field        | Type     | Notes                                                              |
-|--------------|----------|--------------------------------------------------------------------|
-| `session_id` | string   | Required. LangGraph thread id; reused across chat + approve.       |
-| `message`    | string   | Required. User utterance.                                          |
-| `intent`     | string   | Optional hint for the supervisor router.                           |
-| `context`    | object   | Optional structured UI context (page, selected numbers, groupSize).|
+| Field        | Type     | Notes                                                                      |
+|--------------|----------|----------------------------------------------------------------------------|
+| `session_id` | string   | Required. LangGraph thread id; reused across chat + approve.              |
+| `message`    | string   | Required. User utterance.                                                  |
+| `intent`     | string   | Optional hint for the supervisor router.                                   |
+| `context`    | object   | Optional structured UI context (page, selected numbers, groupSize).       |
 | `config_id`  | integer  | Optional. Override the active LLM with a stored config for this request only. |
-| `lang`       | string   | Optional. Language hint (`he` / `en`) forwarded to workers.        |
+| `lang`       | string   | Optional. Language hint (`he` / `en`) forwarded to workers.                |
 
 Response (normal completion):
 
@@ -217,6 +222,30 @@ Response (agent paused for human approval of a write tool):
   "paused": true
 }
 ```
+
+### POST /api/agent/chat/stream
+
+SSE streaming variant of `/api/agent/chat`. Same request body, but the response
+is `text/event-stream` — the Java BFF opens a no-read-timeout `HttpClient`
+connection to the agent's `/chat/stream` and relays SSE events as they arrive.
+The emitter does not time out (LLM token streams can be long-running on small
+local models).
+
+Request body: identical to [`POST /api/agent/chat`](#post-apiagentchat).
+
+SSE event types (relayed from the agent):
+
+| Event `type` | Description                                                  |
+|--------------|--------------------------------------------------------------|
+| `token`      | LLM output token (partial response text).                    |
+| `tool`       | Tool call started / completed (name + args + result).        |
+| `hitl`       | Agent paused for human approval (`{ tool, args }`).          |
+| `done`       | Stream complete (`{ thread_id, paused }`).                   |
+| `error`      | Error during generation (`{ message }`).                     |
+
+> When a `hitl` event arrives, the UI calls `POST /api/agent/approve` with the
+> same `session_id`; the agent resumes and may open a new stream or return the
+> final result synchronously.
 
 ### POST /api/agent/approve
 

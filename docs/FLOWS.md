@@ -66,6 +66,45 @@ sequenceDiagram
 
 ---
 
+## 2a. Social Login Flow (Google / Facebook)
+
+Optional identity providers configured in the Keycloak realm. Credentials are
+injected via `.env` (`GOOGLE_CLIENT_ID/SECRET`, `FACEBOOK_CLIENT_ID/SECRET`).
+If the env vars are empty, the provider buttons appear on the login page but
+produce an error when clicked. Both providers use `trustEmail: false` and the
+built-in `first broker login` flow.
+
+```mermaid
+sequenceDiagram
+    participant U as Browser / PWA
+    participant KC as Keycloak
+    participant IDP as Google / Facebook
+    participant J as Java BFF
+    participant G as Go Service
+
+    U->>KC: Click "Sign in with Google" (or Facebook)
+    KC->>IDP: OAuth redirect (clientId from env)
+    IDP->>U: Provider login + consent
+    U->>IDP: Authenticate
+    IDP-->>KC: Authorization code callback
+    KC->>IDP: Exchange code for user info
+    IDP-->>KC: Email + profile
+
+    alt Email matches existing account
+        KC->>U: Prompt for existing password (first broker login flow)
+        U->>KC: Confirm password
+        KC->>KC: Link social identity to existing account
+    else No matching email
+        KC->>KC: Create new account (USER role, /users + /unverified groups)
+    end
+
+    KC-->>U: Issue RS256 JWT (same as password login)
+    U->>J: API call with Bearer JWT
+    Note over J,G: Same JWT validation path as password login
+```
+
+---
+
 ## 3. Agent Chat Flow
 
 ```mermaid
@@ -166,12 +205,23 @@ sequenceDiagram
     G->>WEB: HTTP GET — fetch latest draws
     WEB-->>G: HTML / JSON draw data
     G->>G: Parse draws (numbers, strong, date, draw_number)
-    G->>DB: UPSERT INTO lottery.lottery_results
-    DB-->>G: Rows inserted/updated
+    G->>DB: InsertNewDraws — INSERT ... ON CONFLICT DO NOTHING
+    DB-->>G: New rows only + affected date range (minDate, maxDate)
+    G->>G: InvalidateRange(minDate, maxDate) — evict cached archive windows overlapping the range
 
     alt First boot (table empty)
         G->>G: Read /seed/lotto.data
         G->>DB: Bulk INSERT historical draws
+    end
+
+    alt Prize backfill (best-effort, non-fatal)
+        G->>DB: GetDrawsWithoutPrizeRefs(limit)
+        DB-->>G: Draw refs missing prize data
+        G->>WEB: HTTP GET per-draw prize page
+        WEB-->>G: HTML prize table
+        G->>DB: UpdatePrizeAmounts(drawNumber, amounts)
+        DB-->>G: Affected draw date
+        G->>G: InvalidateRange(affected dates)
     end
 
     alt Scraper fails (site down / changed)

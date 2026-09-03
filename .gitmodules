@@ -13,3 +13,6 @@
 [submodule "proto"]
 	path = proto
 	url = git@github.com:lihai1/statistiloto-proto.git
+[submodule "ui-fable"]
+	path = ui-fable
+	url = git@github.com:lihai1/statistiloto-ui-fable.git

@@ -46,7 +46,7 @@ services:
     image: quay.io/keycloak/keycloak:25.0
     container_name: statistiloto-auth
     restart: unless-stopped
-    command: ["start-dev", "--import-realm", "--http-relative-path=/auth", "--features=hostname:v1"]
+    command: ["start-dev", "--import-realm", "--http-relative-path=/auth"]
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-statistiloto}?currentSchema=keycloak
@@ -54,15 +54,26 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      # Dynamic hostname: resolve from the incoming request's Host /
-      # X-Forwarded-Host so the stack works from localhost AND LAN IPs
-      # (e.g. http://192.168.1.140). Requires KC_PROXY_HEADERS=forwarded
-      # and Traefik forwarding the Host header (default behavior).
+      # Dev mode: static hostname + no proxy headers so Keycloak does NOT
+      # set Secure cookies on HTTP. KC_PROXY_HEADERS=xforwarded forces
+      # Secure cookies (Keycloak assumes TLS termination at the proxy),
+      # which breaks the registration flow over HTTP in local dev.
+      # For prod (docker-compose.prod.yml) with HTTPS, re-enable
+      # KC_PROXY_HEADERS=xforwarded for dynamic hostname resolution.
+      KC_HOSTNAME: localhost
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
-      KC_PROXY_HEADERS: forwarded
+      # ── Social login provider credentials ───────────────────
+      # Leave empty to disable social login (buttons won't work).
+      # Set in .env to enable Google / Facebook sign-in.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
     volumes:
       - ./auth/realm-statistiloto.dev.json:/opt/keycloak/data/import/realm-statistiloto.json:ro
+      - ./auth/themes:/opt/keycloak/themes:ro
     networks:
       - statistiloto-net
     depends_on:
@@ -146,14 +157,12 @@ services:
       timeout: 5s
       retries: 20
       start_period: 40s
+    # Traefik routing is handled by proxy/dynamic.yml (file provider) in dev.
+    # Docker-label-based routers are only used in prod where the websecure
+    # entrypoint (443/TLS) exists.  Keeping traefik.enable=false here avoids
+    # a broken router that references a non-existent entrypoint in dev.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=statistiloto-new_statistiloto-net"
-      - "traefik.http.routers.server.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.server.entryPoints=websecure"
-      - "traefik.http.routers.server.tls=true"
-      - "traefik.http.routers.server.middlewares=edge-jwt,rl-api,secure-headers"
-      - "traefik.http.services.server.loadbalancer.server.port=8082"
+      - "traefik.enable=false"
 
   # ── Python LangGraph agent worker ───────────────────────────────
   agent:
@@ -213,11 +222,11 @@ services:
       retries: 3
       start_period: 10s
 
-  # ── Angular PWA (Nginx) ─────────────────────────────────────────
+  # ── Angular PWA (Nginx) — ui-fable build ────────────────────────
   ui:
     build:
-      context: .
-      dockerfile: ui/Dockerfile
+      context: ./ui-fable
+      dockerfile: Dockerfile
     container_name: statistiloto-ui
     restart: unless-stopped
     networks:
@@ -246,11 +255,17 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - statistiloto-net
+    # Proxy can start independently — Traefik routes to backends as they
+    # come online.  Hard depends_on would block proxy startup behind the
+    # auth→agent→server health chain (120s+ start_period).
     depends_on:
-      - auth
-      - server
-      - agent
       - ui
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 networks:
   statistiloto-net:

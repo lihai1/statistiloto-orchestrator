@@ -41,6 +41,13 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - **FR-10** Three tiers: Free, Paid, Admin (owner/developer super-user).
 - **FR-11** JWTs validated at the edge (Traefik ForwardAuth) and in each
   service (defense-in-depth).
+- **FR-11a** Optional social login via Google and Facebook Keycloak identity
+  providers. Credentials injected via `.env` (`GOOGLE_CLIENT_ID/SECRET`,
+  `FACEBOOK_CLIENT_ID/SECRET`); disabled (buttons appear but non-functional)
+  when env vars are empty. Both providers use `trustEmail: false` and the
+  `first broker login` flow to prevent account takeover via unverified social
+  emails. New social registrations get `USER` role + `/users` + `/unverified`
+  groups. See [`auth/README.md`](../auth/README.md) for setup.
 
 ### Data Freshness
 - **FR-12** Scheduled scraper refreshes `lottery_results` from the Israeli
@@ -96,6 +103,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Config in `proxy/traefik.yml` + `proxy/dynamic.yml`.
 
 ### ui (Angular 20 PWA)
+- Built from the `ui-fable/` submodule (PrimeNG 20 + keycloak-js 25).
 - Standalone components, OnPush change detection, signals.
 - Keycloak PKCE auth, JWT interceptor, route guards.
 - Talks ONLY to the Java BFF at `/api/*` — never to Go directly.
@@ -142,6 +150,15 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Realm `statistiloto` with clients: `statistiloto-ui` (public, PKCE),
   `statistiloto-server` (confidential).
 - Roles: USER, PAID, ADMIN.
+- Groups: `/users`, `/admins`, `/paid`, `/unverified`.
+  `defaultGroups: ["/users", "/unverified"]` — new registrations (password and
+  social) start in both; remove from `/unverified` after email verification or
+  admin approval.
+- Identity providers: Google and Facebook (optional, env-driven). Both use
+  `trustEmail: false` and the `first broker login` flow.
+- Custom login theme `statistiloto` (mounted from `auth/themes/`), extending
+  `keycloak.v2` with Statistiloto design tokens, Hebrew/RTL, and social
+  buttons. See [`auth/README.md`](../auth/README.md).
 - Owns `keycloak` schema.
 - Port 8080 (internal).
 

@@ -42,7 +42,7 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 | Service  | Tech                  | Owns                                   | Port(s)      |
 |----------|-----------------------|----------------------------------------|--------------|
 | `proxy`  | Traefik v3.2          | Edge routing, TLS (prod), rate limiting, ForwardAuth | 80 (dev), 443 (prod) |
-| `ui`     | Angular 20 PWA + Nginx| Static UI                              | 80 (internal)|
+| `ui`     | Angular 20 PWA + Nginx| Static UI (built from `ui-fable/` submodule) | 80 (internal)|
 | `server` | Spring Boot 3.5 / Java 21 | App data (`app` schema), BFF REST, agent proxy | 8082     |
 | `lottery`| Go 1.25               | Lottery results + algorithm + Simulate backtest (`lottery` schema, incl. `prize_amounts`) | 8080, 9090 |
 | `agent`  | Python 3.12 / LangGraph | Agent data (`agent` schema): `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, pgvector `embeddings`; free-tier LLM toggle | 8000 (internal) |
@@ -78,6 +78,22 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 7. When the UI calls `/api/agent/*`, the Java BFF forwards the JWT to the
    Python agent, which validates it against Keycloak JWKS independently
    (defense-in-depth) before running the LangGraph supervisor.
+
+### Social Login (Google / Facebook)
+
+The realm configures two built-in Keycloak identity providers (Google and
+Facebook). Credentials are injected via environment variables
+(`GOOGLE_CLIENT_ID/SECRET`, `FACEBOOK_CLIENT_ID/SECRET` in `.env`). If the
+env vars are empty, the providers are enabled in the realm but non-functional
+— the buttons appear on the login page but clicking them produces an error.
+
+Both providers use `trustEmail: false` and the built-in `first broker login`
+flow: when a social email matches an existing password account, Keycloak
+prompts for the existing password before linking (prevents account takeover
+via unverified social emails). New social registrations get the `USER` role
+and the `/users` + `/unverified` groups (via `defaultGroups`). See
+[`auth/README.md`](../auth/README.md) for provider setup and the custom
+`statistiloto` login theme.
 
 ## Communication
 

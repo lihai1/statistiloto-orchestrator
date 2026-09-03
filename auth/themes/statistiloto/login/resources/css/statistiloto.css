@@ -1,0 +1,479 @@
+/* ──────────────────────────────────────────────────────────────
+   Statistiloto custom Keycloak login theme.
+   Ports the ui-fable design system (src/styles.scss) into Keycloak's
+   keycloak.v2 / PatternFly v5 login page. Hebrew-first, RTL, indigo
+   primary, Heebo + Quicksand fonts, rounded cards, gradient buttons.
+   ────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&family=Quicksand:wght@500;600;700&display=swap');
+
+/* ── Design tokens (mirror ui-fable/src/styles.scss :root) ──── */
+:root {
+  --coach-primary: #6366f1;
+  --coach-primary-d: #4f46e5;
+  --coach-primary-soft: rgba(99, 102, 241, 0.1);
+
+  --bg: #faf7ff;
+  --surface: #ffffff;
+  --surface-2: #f3eefb;
+  --text: #1e1b2e;
+  --text-secondary: #6b7280;
+  --border: #ece7f5;
+
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow-1: 0 1px 2px rgba(30, 27, 46, 0.04), 0 4px 16px rgba(99, 102, 241, 0.07);
+  --shadow-2: 0 4px 8px rgba(30, 27, 46, 0.06), 0 12px 32px rgba(99, 102, 241, 0.12);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Override PatternFly v5 CSS variables */
+  --pf-v5-c-login__main--BackgroundColor: transparent;
+  --pf-v5-global--primary-color--100: var(--coach-primary);
+  --pf-v5-global--primary-color--200: var(--coach-primary-d);
+  --pf-v5-global--Color--100: var(--text);
+  --pf-v5-global--Color--200: var(--text-secondary);
+  --pf-v5-global--BorderColor--100: var(--border);
+  --pf-v5-global--link--Color: var(--coach-primary);
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--coach-primary);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--coach-primary-d);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --coach-primary: #818cf8;
+    --coach-primary-d: #6366f1;
+    --coach-primary-soft: rgba(129, 140, 248, 0.14);
+
+    --bg: #0f1020;
+    --surface: #1a1b2e;
+    --surface-2: #242540;
+    --text: #e6e1f3;
+    --text-secondary: #9ca3af;
+    --border: #2a2b45;
+
+    --success: #34d399;
+    --danger: #f87171;
+    --warning: #fbbf24;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+    --shadow-2: 0 4px 8px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ── Base / layout ──────────────────────────────────────────── */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Heebo', 'Assistant', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  direction: rtl;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Quicksand', 'Heebo', 'Segoe UI', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--coach-primary);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* ── PatternFly v5 login layout overrides ───────────────────── */
+
+/* Outer page background */
+.pf-v5-c-login,
+.pf-c-login {
+  background: var(--bg) !important;
+  color: var(--text);
+  font-family: 'Heebo', sans-serif;
+}
+
+/* Login main container — remove default dark band */
+.pf-v5-c-login__main,
+.pf-c-login__main {
+  background: transparent !important;
+}
+
+/* Login header area (logo + realm name) */
+.pf-v5-c-login__main-header,
+.pf-c-login__main-header {
+  background: transparent;
+}
+
+.pf-v5-c-login__main-header-desc,
+.pf-c-login__main-header-desc {
+  color: var(--text-secondary);
+}
+
+/* The login card / main body */
+.pf-v5-c-login__main-body,
+.pf-c-login__main-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 32px;
+  margin: 0 auto;
+  max-width: 460px;
+}
+
+@media (max-width: 480px) {
+  .pf-v5-c-login__main-body,
+  .pf-c-login__main-body {
+    padding: 24px 20px;
+    border-radius: var(--radius);
+  }
+}
+
+/* Login footer area (links: register, forgot password) */
+.pf-v5-c-login__main-footer,
+.pf-c-login__main-footer {
+  background: transparent;
+  border-top: none;
+  padding-top: 20px;
+}
+
+.pf-v5-c-login__main-footer-links,
+.pf-c-login__main-footer-links {
+  gap: 16px;
+}
+
+.pf-v5-c-login__main-footer-link,
+.pf-c-login__main-footer-link {
+  color: var(--coach-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ── Form controls (inputs) ─────────────────────────────────── */
+.pf-v5-c-form-control,
+.pf-c-form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="username"] {
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface) !important;
+  border: 1.5px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 10px 14px !important;
+  transition: border-color 0.15s var(--ease);
+}
+
+.pf-v5-c-form-control:focus,
+.pf-c-form-control:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="username"]:focus {
+  outline: none;
+  border-color: var(--coach-primary) !important;
+  box-shadow: 0 0 0 3px var(--coach-primary-soft) !important;
+}
+
+/* Form labels */
+.pf-v5-c-form__label,
+.pf-c-form__label,
+label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+
+/* Primary button — indigo gradient */
+.pf-v5-c-button.pf-m-primary,
+.pf-c-button.pf-m-primary,
+#kc-login,
+.kc-form-buttons .btn-primary,
+button[type="submit"].pf-m-primary {
+  background: linear-gradient(135deg, var(--coach-primary), var(--coach-primary-d)) !important;
+  border: none !important;
+  color: #fff !important;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: 12px !important;
+  padding: 11px 24px !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  transition: box-shadow 0.2s var(--ease), transform 0.2s;
+  cursor: pointer;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover,
+.kc-form-buttons .btn-primary:hover,
+button[type="submit"].pf-m-primary:hover {
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45) !important;
+  transform: translateY(-1px);
+}
+
+.pf-v5-c-button.pf-m-primary:active,
+.pf-c-button.pf-m-primary:active,
+#kc-login:active {
+  transform: scale(0.98);
+}
+
+/* Secondary / link buttons */
+.pf-v5-c-button.pf-m-secondary,
+.pf-c-button.pf-m-secondary,
+.kc-form-buttons .btn-secondary {
+  background: transparent !important;
+  border: 1.5px solid var(--coach-primary) !important;
+  color: var(--coach-primary) !important;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  border-radius: 12px !important;
+  padding: 10px 22px !important;
+  transition: background 0.2s var(--ease);
+}
+
+.pf-v5-c-button.pf-m-secondary:hover,
+.pf-c-button.pf-m-secondary:hover,
+.kc-form-buttons .btn-secondary:hover {
+  background: var(--coach-primary-soft) !important;
+}
+
+/* Full-width submit button on login form */
+#kc-login,
+.kc-form-buttons .btn-primary {
+  width: 100%;
+  display: block;
+}
+
+/* ── Identity provider (social login) buttons ───────────────── */
+
+/* Container for social login buttons */
+#kc-social-providers,
+.kc-social-grid,
+.pf-v5-c-login__main-body .social-providers {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Social section heading */
+#kc-social-providers legend,
+.kc-social-grid legend,
+.social-providers-title {
+  font-family: 'Quicksand', 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 14px;
+  padding: 0;
+}
+
+/* Individual social provider button */
+.kc-social-grid .pf-v5-c-button,
+.kc-social-grid .pf-c-button,
+#kc-social-providers .pf-v5-c-button,
+#kc-social-providers .pf-c-button,
+.kc-social-provider-link,
+a[id^="social-"] {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--surface) !important;
+  border: 1.5px solid var(--border) !important;
+  border-radius: 12px !important;
+  padding: 11px 18px !important;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text) !important;
+  text-decoration: none;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), transform 0.2s;
+  margin-bottom: 10px;
+}
+
+.kc-social-grid .pf-v5-c-button:hover,
+.kc-social-grid .pf-c-button:hover,
+#kc-social-providers .pf-v5-c-button:hover,
+#kc-social-providers .pf-c-button:hover,
+.kc-social-provider-link:hover,
+a[id^="social-"]:hover {
+  border-color: var(--coach-primary) !important;
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+/* Social provider icons — brand colors */
+.kc-social-grid img,
+#kc-social-providers img,
+a[id^="social-"] img {
+  width: 20px;
+  height: 20px;
+}
+
+/* ── Alert / info messages ──────────────────────────────────── */
+.pf-v5-c-alert,
+.pf-c-alert,
+.kc-feedback {
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.pf-v5-c-alert.pf-m-danger,
+.pf-c-alert.pf-m-danger,
+.kc-feedback-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.pf-v5-c-alert.pf-m-success,
+.pf-c-alert.pf-m-success,
+.kc-feedback-success {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.pf-v5-c-alert.pf-m-warning,
+.pf-c-alert.pf-m-warning,
+.kc-feedback-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.pf-v5-c-alert.pf-m-info,
+.pf-c-alert.pf-m-info,
+.kc-feedback-info {
+  background: var(--coach-primary-soft);
+  border-color: var(--coach-primary);
+  color: var(--coach-primary);
+}
+
+/* ── Page-specific: registration, forgot password ───────────── */
+
+/* Registration form inherits all form-control + button styles above */
+#kc-register-form,
+#kc-update-profile-form {
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* Forgot password / email verification pages */
+#kc-reset-password-form,
+#kc-update-email-form {
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* ── Branding header (logo + app name) ──────────────────────── */
+/* Logo injected via CSS ::before on the login header to avoid a
+   FreeMarker template override (safer — page works even if the
+   pseudo-element fails to render). */
+.pf-v5-c-login__main-header::before,
+.pf-c-login__main-header::before {
+  content: '';
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  background-image: url('../img/logo.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Realm/title text styled as brand wordmark */
+.pf-v5-c-login__main-header .pf-v5-c-title,
+.pf-c-login__main-header .pf-c-title,
+.pf-v5-c-login__main-header h1,
+.pf-c-login__main-header h1 {
+  font-family: 'Quicksand', 'Heebo', sans-serif;
+  font-weight: 700;
+  color: var(--coach-primary);
+}
+
+.statistiloto-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.statistiloto-brand-header img {
+  width: 44px;
+  height: 44px;
+}
+
+.statistiloto-brand-header .brand-name {
+  font-family: 'Quicksand', 'Heebo', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--coach-primary);
+}
+
+/* ── Utility / misc ─────────────────────────────────────────── */
+
+/* Checkbox styling (remember me, terms) */
+.pf-v5-c-check__input,
+.pf-c-check__input,
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--coach-primary);
+  cursor: pointer;
+}
+
+.pf-v5-c-check__label,
+.pf-c-check__label,
+input[type="checkbox"] + label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Divider between social and password login */
+.kc-social-grid + .pf-v5-c-form,
+.kc-social-grid + form {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Terms / privacy text */
+.kc-info-area,
+.pf-v5-c-login__main-footer-band,
+.pf-c-login__main-footer-band {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Loading spinner */
+.kc-spinner,
+.pf-v5-c-spinner,
+.pf-c-spinner {
+  color: var(--coach-primary);
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

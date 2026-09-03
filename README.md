@@ -52,7 +52,7 @@ flowchart TB
 | Service   | Tech                        | Submodule / Repo                                          | Port(s)       | DB Schema Owned         |
 |-----------|-----------------------------|-----------------------------------------------------------|---------------|-------------------------|
 | `proxy`   | Traefik v3.2                | — (config in `proxy/`)                                    | 80, 443       | —                       |
-| `ui`      | Angular 20 PWA + Nginx      | `ui/` → `statistiloto-ui`                                 | 80 (internal) | —                       |
+| `ui`      | Angular 20 PWA + Nginx      | `ui-fable/` → `statistiloto-ui-fable`                     | 80 (internal) | —                       |
 | `server`  | Java 21 / Spring Boot 3.5   | `server/` → `statistiloto-server`                         | 8082          | `app`                   |
 | `lottery` | Go 1.25                     | `lottery-stats-server/` → `stat-tree-server`              | 8080, 9090    | `lottery`               |
 | `agent`   | Python 3.12 / LangGraph     | `agent/` → `statistiloto-agent`                           | 8000          | `agent`                 |
@@ -86,6 +86,11 @@ Each service owns its own PostgreSQL schema — no shared tables, boundaries enf
   (`config_id`) and language hint (`lang`) on chat.
 - **Admin** — runtime LLM configuration (stored configs CRUD + activate/test),
   free-tier LLM toggle, token usage, audit log, scraper control, RAG reindex.
+- **Social Login** — optional Google and Facebook sign-in via Keycloak identity
+  providers. Credentials are injected via `.env` (`GOOGLE_CLIENT_ID/SECRET`,
+  `FACEBOOK_CLIENT_ID/SECRET`); leave empty to disable (buttons appear but
+  won't work). See [`auth/README.md`](auth/README.md) for setup and the custom
+  `statistiloto` login theme.
 
 ## Quick Start
 
@@ -115,10 +120,14 @@ Then open **http://localhost/** (dev stack, HTTP).
 
 > The dev stack is reachable from any host that can route to the Docker host —
 > including LAN IPs (e.g. `http://192.168.1.140/`) and Devin browser previews.
-> Traefik's dev `dynamic.yml` routes by path prefix (not `Host`), and Keycloak
-> runs with `KC_HOSTNAME_STRICT: false` so it resolves its hostname from the
-> incoming request. The dev realm (`auth/realm-statistiloto.dev.json`) allows
-> `http://*/*` and `https://*/*` redirect URIs for this reason.
+> Traefik's dev `dynamic.yml` routes by path prefix (not `Host`), and the dev
+> realm (`auth/realm-statistiloto.dev.json`) allows `http://*/*` and
+> `https://*/*` redirect URIs. Keycloak dev runs with a static
+> `KC_HOSTNAME: localhost` and no `KC_PROXY_HEADERS` (so it does not set Secure
+> cookies over HTTP); Traefik's web entrypoint trusts `X-Forwarded-*` headers
+> (`forwardedHeaders.insecure: true`) so external TLS tunnels (ngrok,
+> cloudflared) still work. For LAN-IP access, browse to `http://localhost/`
+> and use port forwarding, or override `KC_HOSTNAME` in `.env`.
 
 > For the production override (`make up-prod` / `docker compose -f
 > docker-compose.yml -f docker-compose.prod.yml up -d`), Traefik enables
@@ -129,7 +138,9 @@ Then open **http://localhost/** (dev stack, HTTP).
 
 ### Test Users
 
-The Keycloak realm is pre-provisioned with three test users (change passwords in production):
+The Keycloak realm is pre-provisioned with three test users (change passwords in production).
+New registrations (password and social) start in the `/users` + `/unverified` groups;
+remove from `/unverified` after email verification or admin approval.
 
 | User                       | Password                | Roles        | Tier |
 |----------------------------|-------------------------|--------------|------|
@@ -145,7 +156,8 @@ This orchestrator repo uses git submodules for all application code:
 |--------------------------|---------------------------|-----------------------------------------------------|------------------------------------------------|
 | `lottery-stats-server`   | `lottery-stats-server/`   | `git@github.com:lihai1/stat-tree-server.git`        | Go lottery algorithm + scraper (gRPC + REST)   |
 | `agent`                  | `agent/`                  | `git@github.com:lihai1/statistiloto-agent.git`      | Python LangGraph agent worker (LLM, RAG, HITL) |
-| `ui`                     | `ui/`                     | `git@github.com:lihai1/statistiloto-ui.git`         | Angular 20 PWA frontend                         |
+| `ui-fable`               | `ui-fable/`               | `git@github.com:lihai1/statistiloto-ui-fable.git`   | Angular 20 PWA frontend (active build)          |
+| `ui`                     | `ui/`                     | `git@github.com:lihai1/statistiloto-ui.git`         | Angular 20 PWA frontend (legacy)                |
 | `server`                 | `server/`                 | `git@github.com:lihai1/statistiloto-server.git`     | Java Spring Boot BFF                            |
 | `proto`                  | `proto/`                  | `git@github.com:lihai1/statistiloto-proto.git`      | Shared protobuf contract (`lottery.proto`)      |
 
@@ -202,6 +214,7 @@ docker compose up --scale server=2 --scale lottery=2
 - [Runbook](docs/runbook.md) — operations, troubleshooting, backup & recovery
 - [Plan](docs/PLAN.md) — original architecture plan and implementation steps
 - [UI Screenshot Tour](docs/screenshots/SCREENSHOTS.md) — automated Playwright screenshots of every page
+- [Auth README](auth/README.md) — Keycloak realm, custom login theme, social login (Google/Facebook) setup
 
 ## Testing
 

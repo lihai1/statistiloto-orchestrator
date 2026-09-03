@@ -104,7 +104,8 @@ up:
 up-dev:
 	@$(MAKE) up ENV=dev
 
-up-prod:
+# Prod needs TLS certs for HTTPS — generate if missing before starting
+up-prod: certs
 	@$(MAKE) up ENV=prod
 
 # Start without rebuilding
@@ -167,15 +168,15 @@ health:
 wait:
 	@echo "[health] Waiting for services to become healthy..."
 	@timeout=300; \
-	while [[ $$timeout -gt 0 ]]; do \
+	while [ "$$timeout" -gt 0 ]; do \
 	  unhealthy=$$($(DC) ps --format json 2>/dev/null | grep -c '"Health":"starting"' || true); \
 	  total=$$($(DC) ps --format json 2>/dev/null | wc -l); \
 	  healthy=$$($(DC) ps --format json 2>/dev/null | grep -c '"Health":"healthy"' || true); \
 	  echo "  healthy=$$healthy/$$total (starting=$$unhealthy)"; \
-	  if [[ $$unhealthy -eq 0 && $$healthy -ge $$total ]]; then break; fi; \
+	  if [ "$$unhealthy" -eq 0 ] && [ "$$healthy" -ge "$$total" ]; then break; fi; \
 	  sleep 10; timeout=$$((timeout - 10)); \
 	done; \
-	if [[ $$timeout -le 0 ]]; then echo "[health] TIMEOUT — some services not healthy"; $(DC) ps; exit 1; \
+	if [ "$$timeout" -le 0 ]; then echo "[health] TIMEOUT — some services not healthy"; $(DC) ps; exit 1; \
 	else echo "[health] All services healthy."; fi
 
 # ─── Tests ──────────────────────────────────────────────────────

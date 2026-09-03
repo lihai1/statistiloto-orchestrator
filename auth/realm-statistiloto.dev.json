@@ -8,6 +8,7 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
+  "loginTheme": "statistiloto",
   "bruteForceProtected": true,
   "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
@@ -16,6 +17,46 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
+  "defaultGroups": [
+    "/users",
+    "/unverified"
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": "false",
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${env.GOOGLE_CLIENT_ID}",
+        "clientSecret": "${env.GOOGLE_CLIENT_SECRET}",
+        "useJwksUrl": "true",
+        "syncMode": "FORCE"
+      }
+    },
+    {
+      "alias": "facebook",
+      "providerId": "facebook",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": "false",
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${env.FACEBOOK_CLIENT_ID}",
+        "clientSecret": "${env.FACEBOOK_CLIENT_SECRET}",
+        "useJwksUrl": "true",
+        "syncMode": "FORCE"
+      }
+    }
+  ],
   "roles": {
     "realm": [
       {
@@ -53,6 +94,10 @@
     {
       "name": "paid",
       "path": "/paid"
+    },
+    {
+      "name": "unverified",
+      "path": "/unverified"
     }
   ],
   "clients": [

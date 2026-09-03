@@ -9,7 +9,7 @@ and a Makefile. All application code lives in submodules.
 | Service   | Image / Build                | Port  | Submodule         | DB schema |
 |-----------|------------------------------|-------|-------------------|-----------|
 | `proxy`   | traefik:v3.2                 | 80,443| — (config in `proxy/`) | — |
-| `ui`      | build `ui/Dockerfile`        | 80    | `ui/`             | — |
+| `ui`      | build `ui-fable/Dockerfile`  | 80    | `ui-fable/`       | — |
 | `server`  | build `server/Dockerfile`    | 8082  | `server/`         | `app` |
 | `lottery` | build `lottery-stats-server/Dockerfile` | 8080,9090 | `lottery-stats-server/` | `lottery` |
 | `agent`   | build `agent/Dockerfile`     | 8000  | `agent/`          | `agent` |
@@ -30,6 +30,7 @@ HTTP → server (tool calls); Server → HTTP :8000 → agent (chat/approve prox
 | `lottery-stats-server/` | `git@github.com:lihai1/stat-tree-server.git` |
 | `agent/`              | `git@github.com:lihai1/statistiloto-agent.git` |
 | `ui/`                 | `git@github.com:lihai1/statistiloto-ui.git`   |
+| `ui-fable/`           | `git@github.com:lihai1/statistiloto-ui-fable.git` |
 | `server/`             | `git@github.com:lihai1/statistiloto-server.git`|
 | `proto/`              | `git@github.com:lihai1/statistiloto-proto.git`|
 

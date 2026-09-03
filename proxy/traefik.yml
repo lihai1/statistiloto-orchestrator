@@ -5,6 +5,12 @@
 entryPoints:
   web:
     address: ":80"
+    # Trust incoming X-Forwarded-* headers so that when an external tunnel
+    # (e.g. ngrok, cloudflared) terminates TLS in front of Traefik, backends
+    # like Keycloak see the correct scheme (https) and host. `insecure: true`
+    # trusts forwarded headers from any source — safe for local dev only.
+    forwardedHeaders:
+      insecure: true
   traefik:
     address: ":8081"
 

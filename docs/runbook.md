@@ -26,16 +26,16 @@ docker compose logs -f
 
 ## Service Endpoints (local dev — HTTP)
 
-| URL                              | Service  |
-|----------------------------------|----------|
-| http://localhost/                | Angular UI |
-| http://localhost/auth/           | Keycloak admin |
-| http://localhost/api/...         | Java BFF |
-| http://localhost/swagger-ui.html | Java OpenAPI |
+| URL                                | Service       |
+|------------------------------------|---------------|
+| <http://localhost/>                | Angular UI    |
+| <http://localhost/auth/>           | Keycloak admin|
+| <http://localhost/api/...>         | Java BFF      |
+| <http://localhost/swagger-ui.html> | Java OpenAPI  |
 
 > The dev stack (`docker-compose.yml`) is HTTP on :80. For HTTPS, run the
 > production override (`make up-prod`) which enables Traefik TLS on :443 —
-> then open **https://localhost/** and accept the self-signed cert.
+> then open **<https://localhost/>** and accept the self-signed cert.
 
 ## Keycloak
 
@@ -46,6 +46,16 @@ docker compose logs -f
   - `admin@statistiloto.local` / `admin-password-change-me` — USER, ADMIN
   - `user@statistiloto.local`  / `user-password-change-me`  — USER (free)
   - `paid@statistiloto.local`  / `paid-password-change-me`  — USER, PAID
+- **Social login** (Google + Facebook): set `GOOGLE_CLIENT_ID/SECRET` and
+  `FACEBOOK_CLIENT_ID/SECRET` in `.env` to enable. Leave empty to disable
+  (buttons appear but won't work). Restart auth after changing: `make restart-auth`.
+- **Custom login theme** (`statistiloto`): mounted from `auth/themes/` as a
+  volume — edit CSS and restart auth, no rebuild needed. See
+  [`auth/README.md`](../auth/README.md) for full theme and social login docs.
+- **Realm re-import**: Keycloak's `--import-realm` only imports if the realm
+  does not already exist in the DB. To apply realm JSON changes to an existing
+  deployment, use `make clean-volumes` (destructive) or apply via the admin
+  UI / `kcadm.sh` and re-export.
 
 ## Database
 
@@ -68,26 +78,31 @@ The Makefile wraps each service's test command (`make test-go`, `make test-java`
 Playwright).
 
 ### Go service
+
 ```bash
 make test-go   # or: docker compose exec lottery go test ./...
 ```
 
 ### Java BFF
+
 ```bash
 make test-java   # or: docker compose exec server ./gradlew test
 ```
 
 ### Angular UI
+
 ```bash
 make test-ui   # or: docker compose exec ui npm test -- --watch=false
 ```
 
 ### Agent
+
 ```bash
 make test-agent   # or: docker compose exec agent make test
 ```
 
 ### Playwright E2E
+
 ```bash
 make test-e2e   # or: cd ui && npx playwright test
 ```
@@ -104,10 +119,12 @@ make scale-server N=3      # one service to N
 ## Troubleshooting
 
 ### Keycloak realm not imported
+
 - Ensure `auth/realm-statistiloto.dev.json` (dev) or `auth/realm-statistiloto.prod.json` (prod) is mounted.
 - Check `docker compose logs auth`.
 
 ### JWT validation fails
+
 - Verify `KEYCLOAK_ISSUER` matches the realm URL reachable from the service.
 - Inside Docker, services use `http://auth:8080/auth/realms/statistiloto`
   (note the `/auth` context path from `--http-relative-path=/auth`).
@@ -115,6 +132,7 @@ make scale-server N=3      # one service to N
   Traefik) or `https://localhost/auth/realms/statistiloto` (prod).
 
 ### 429 Too Many Requests
+
 - Traefik rate limiting is active. Reduce request frequency.
 - Adjust limits in `proxy/dynamic.yml` (per-minute averages/bursts).
 
