@@ -27,6 +27,11 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - **FR-5** Save and manage generated/favorite number sets per user account
   (CRUD: create, list, delete).
 - **FR-6** Retrieve the authenticated user's profile (`/api/me`).
+- **FR-6a** Persist each user's preferred archive date range
+  (`PUT /api/me/archive`) so the same Simulate/Analyze window is restored
+  across sessions and devices. Stored in `app.user_profile.archive_from` /
+  `archive_to` (Flyway `V2`). `null` means "use the defaults"
+  (2004-02-12 / today).
 
 ### AI Agent
 - **FR-7** Chat with an AI assistant (SSE streaming) that can call lottery

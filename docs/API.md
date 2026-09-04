@@ -8,7 +8,48 @@ Traefik. The UI never calls the Go service directly.
 | Endpoint             | Method | Auth | Description                                                           |
 |----------------------|--------|------|-----------------------------------------------------------------------|
 | `/api/auth/verify`   | GET    | No   | Traefik ForwardAuth target. Returns 200 if the Bearer token is valid. |
-| `/api/me`            | GET    | Yes  | Returns the authenticated user's profile.                             |
+| `/api/me`            | GET    | Yes  | Returns the authenticated user's profile (incl. persisted archive window). |
+| `/api/me/archive`    | PUT    | Yes  | Update the user's preferred archive date range (persisted across sessions). |
+
+### GET /api/me
+
+Returns the authenticated user's profile. Auto-creates a `user_profile` row on
+first login. The `archiveFrom`/`archiveTo` fields are the user's preferred
+archive date range (persisted in `app.user_profile`); `null` means "use the
+defaults" (2004-02-12 / today).
+
+Response:
+
+```json
+{
+  "sub": "f:google-1234:abc",
+  "email": "user@statistiloto.local",
+  "displayName": "User Name",
+  "roles": ["USER"],
+  "archiveFrom": "2024-01-01",
+  "archiveTo": "2024-12-31"
+}
+```
+
+### PUT /api/me/archive
+
+Update the authenticated user's preferred archive date range. Persisted so the
+same window is restored across sessions and devices. Either field may be `null`
+or blank to clear it (fall back to defaults).
+
+```json
+{
+  "from": "2024-01-01",
+  "to": "2024-12-31"
+}
+```
+
+| Field   | Type   | Required | Notes                                                          |
+|---------|--------|----------|----------------------------------------------------------------|
+| `from`  | string | no       | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults). |
+| `to`    | string | no       | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults). |
+
+Response: identical to [`GET /api/me`](#get-apime) with the updated window.
 
 ## Lottery Computation (proxied to Go via gRPC)
 

@@ -1,0 +1,24 @@
+# ngrok tunnel override.
+#
+# Usage:
+#   make up-ngrok        # or: docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d
+#
+# Makes Keycloak derive its hostname dynamically from Traefik's
+# X-Forwarded-Host / X-Forwarded-Proto headers so that OIDC issuer URLs,
+# login form actions, and post-login redirects use the public ngrok host
+# (e.g. https://cash-spongy-reptilian.ngrok-free.dev) instead of the
+# hardcoded `localhost` from docker-compose.yml.
+#
+# This is the same pattern used by docker-compose.prod.yml (which enables
+# KC_PROXY_HEADERS=xforwarded for HTTPS). Safe here because ngrok
+# terminates TLS, so Secure cookies are correct.
+
+services:
+  auth:
+    environment:
+      # Override the static `localhost` hostname from the base file.
+      # Empty value = Keycloak uses the request Host header (dynamic).
+      KC_HOSTNAME: ""
+      # Trust Traefik's X-Forwarded-* headers so Keycloak sees the
+      # public ngrok host + https scheme.
+      KC_PROXY_HEADERS: xforwarded

@@ -41,6 +41,7 @@ make setup          # one-shot: submodules + .env + TLS certs
 make up             # build + start detached (uses docker-compose.yml)
 make up-dev         # dev compose
 make up-prod        # prod compose (docker-compose.prod.yml)
+make up-ngrok       # ngrok override (docker-compose.ngrok.yml) — dynamic Keycloak hostname for public tunnel
 make ps             # containers + health
 make health         # formatted health table
 make wait           # wait for all healthy
@@ -83,6 +84,9 @@ make up           # dev stack — HTTP on :80 (no TLS needed)
 # open http://localhost/  (dev)
 # For HTTPS/prod: cd proxy && ./generate-cert.sh && cd ..  then  make up-prod
 # open https://localhost/  (accept self-signed cert)
+# For a public ngrok tunnel: run `ngrok http 80` separately, then
+#   make up-ngrok   (docker-compose.ngrok.yml clears KC_HOSTNAME +
+#   sets KC_PROXY_HEADERS=xforwarded so OIDC uses the ngrok host)
 ```
 
 Test users (change passwords in production):
@@ -106,6 +110,8 @@ Test users (change passwords in production):
 - Traefik ForwardAuth hits `server`'s `/api/auth/verify` — if server is down, all `/api/*` returns 401 even for valid tokens.
 - WSL: if `docker` fails with permission errors, run once per session: `sudo usermod -aG docker "$(whoami)"` then reopen shell.
 - Prod compose (`docker-compose.prod.yml`) is an *override* on top of `docker-compose.yml`: it enables Traefik TLS on :443 (mounting `proxy/certs` + `traefik.prod.yml`/`dynamic.prod.yml`), switches Keycloak to `start` (prod mode), sets `restart: always`, adds `deploy.resources` limits, disables `LOTTERY_SEED_ON_BOOT`, and tightens the Ollama queue. It does **not** swap in pre-built registry images — `build:` contexts are still inherited from the base file.
+- ngrok compose (`docker-compose.ngrok.yml`) is an *override* on top of `docker-compose.yml`: it clears `KC_HOSTNAME` (so Keycloak uses the request `Host` header dynamically) and sets `KC_PROXY_HEADERS=xforwarded` so OIDC issuer/redirect URLs resolve to the public ngrok host. Run `ngrok http 80` separately — the override does not start the tunnel. Safe because ngrok terminates TLS, so Secure cookies are correct.
+- The Java BFF schema (`app`) is Flyway-managed inside the `server` submodule. `V2__add_archive_window_to_user_profile.sql` adds `archive_from`/`archive_to` columns to `app.user_profile` (persisted per-user archive date range). Flyway runs on server boot; `db/init-schemas.sh` only creates the schema, not these columns.
 
 ## Verification (full-stack feature)
 

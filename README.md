@@ -136,6 +136,21 @@ Then open **http://localhost/** (dev stack, HTTP).
 > `https://statistiloto.example.com/*` and sets `sslRequired: external` —
 > **edit the placeholder domain before deploying.**
 
+> **Public tunnel (ngrok):** to expose the dev stack over a public HTTPS URL
+> (e.g. for mobile testing or webhook callbacks), start a tunnel first
+> (`ngrok http 80`), then bring the stack up with the ngrok override:
+>
+> ```bash
+> make up-ngrok   # or: docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d --build
+> ```
+>
+> `docker-compose.ngrok.yml` clears `KC_HOSTNAME` and sets
+> `KC_PROXY_HEADERS=xforwarded` so Keycloak derives its issuer/redirect host
+> dynamically from Traefik's `X-Forwarded-Host`/`X-Forwarded-Proto` headers
+> (the public ngrok host). The dev realm already allows `http://*/*` and
+> `https://*/*` redirect URIs, so no realm edit is needed. Run `ngrok http 80`
+> separately — the override does not start the tunnel.
+
 ### Test Users
 
 The Keycloak realm is pre-provisioned with three test users (change passwords in production).

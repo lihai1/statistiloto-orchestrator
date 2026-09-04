@@ -36,6 +36,21 @@ docker compose logs -f
 > The dev stack (`docker-compose.yml`) is HTTP on :80. For HTTPS, run the
 > production override (`make up-prod`) which enables Traefik TLS on :443 —
 > then open **<https://localhost/>** and accept the self-signed cert.
+>
+> **Public tunnel (ngrok):** to expose the dev stack over a public HTTPS URL,
+> start a tunnel first (`ngrok http 80`), then bring the stack up with the
+> ngrok override:
+>
+> ```bash
+> make up-ngrok   # or: docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d --build
+> ```
+>
+> `docker-compose.ngrok.yml` clears `KC_HOSTNAME` and sets
+> `KC_PROXY_HEADERS=xforwarded` so Keycloak derives its issuer/redirect host
+> dynamically from the public ngrok host (via Traefik's `X-Forwarded-*`
+> headers). The dev realm allows `http://*/*` and `https://*/*` redirect URIs,
+> so no realm edit is needed. The override does **not** start the tunnel — run
+> `ngrok http 80` separately.
 
 ## Keycloak
 

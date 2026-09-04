@@ -22,6 +22,7 @@ ENV_EXAMPLE      := .env.example
 COMPOSE          := docker compose
 COMPOSE_DEV      := $(COMPOSE)
 COMPOSE_PROD     := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
+COMPOSE_NGROK    := $(COMPOSE) -f docker-compose.yml -f docker-compose.ngrok.yml
 
 # Active compose command — overridden by ENV=prod
 ENV              ?= dev
@@ -39,7 +40,7 @@ APP_SERVICES     := lottery server agent ui
 .PHONY: help \
         setup init-submodules env certs \
         build build-dev build-prod pull \
-        up up-dev up-prod down down-dev down-prod restart restart-% \
+        up up-dev up-prod up-ngrok down down-dev down-prod restart restart-% \
         ps logs logs-% logs-follow \
         health wait \
         test test-go test-java test-ui test-agent test-e2e \
@@ -106,6 +107,13 @@ up:
 
 up-dev:
 	@$(MAKE) up ENV=dev
+
+# ngrok: start stack with Keycloak dynamic hostname so the public ngrok
+# URL works for OIDC login. Run `ngrok http 80` separately first.
+up-ngrok:
+	@echo "[up] Starting stack with ngrok override (dynamic Keycloak hostname)..."
+	$(COMPOSE_NGROK) up -d --build
+	@$(MAKE) wait
 
 # Prod needs TLS certs for HTTPS — generate if missing before starting
 up-prod: certs
@@ -336,6 +344,7 @@ help:
 	@echo "  up                 — build + start detached (active env)"
 	@echo "  up-dev             — build + start dev"
 	@echo "  up-prod            — build + start prod"
+	@echo "  up-ngrok           — build + start with ngrok override (dynamic Keycloak hostname)"
 	@echo "  start              — start without rebuild"
 	@echo "  down               — stop + remove containers"
 	@echo "  stop               — stop containers (keep them)"
