@@ -9,6 +9,12 @@
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "loginTheme": "statistiloto",
+  "internationalizationEnabled": true,
+  "defaultLocale": "he",
+  "supportedLocales": [
+    "he",
+    "en"
+  ],
   "bruteForceProtected": true,
   "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
@@ -140,7 +146,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost/*,http://127.0.0.1/*,http://*/*,https://localhost/*,https://127.0.0.1/*,https://*/*"
+        "post.logout.redirect.uris": ""
       },
       "defaultClientScopes": [
         "openid",
@@ -211,14 +217,105 @@
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "mapper-given-name",
+          "name": "given_name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "firstName",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "given_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "mapper-family-name",
+          "name": "family_name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "lastName",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "family_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "mapper-preferred-username",
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "username",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "mapper-name",
+          "name": "name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "name": "email",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "mapper-email",
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "email",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "mapper-email-verified",
+          "name": "email_verified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "emailVerified",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean"
+          }
+        }
+      ]
     },
     {
       "name": "roles",

@@ -9,6 +9,9 @@
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "loginTheme": "statistiloto",
+  "internationalizationEnabled": true,
+  "defaultLocale": "he",
+  "supportedLocales": ["he", "en"],
   "bruteForceProtected": true,
   "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
@@ -123,7 +126,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "https://statistiloto.example.com/*"
+        "post.logout.redirect.uris": ""
       },
       "defaultClientScopes": [
         "openid",

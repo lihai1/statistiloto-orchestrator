@@ -12,6 +12,9 @@
 #   make test            — run all unit/integration tests
 #   make test-e2e        — run Playwright E2E (requires stack running)
 
+# Use bash for recipe shells (Makefile uses [[ ... ]] bash-isms)
+SHELL := /bin/bash
+
 # ─── Configuration ──────────────────────────────────────────────
 ENV_FILE         := .env
 ENV_EXAMPLE      := .env.example

@@ -42,3 +42,5 @@ ui/test-results/
 data/
 postgres-data/
 proxy/certs/
+
+.playwright-mcp/
