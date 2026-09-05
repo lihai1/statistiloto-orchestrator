@@ -86,6 +86,32 @@ make db-shell     # or: docker compose exec db psql -U statistiloto -d statistil
 \dt agent.*
 ```
 
+> The `app` schema is Flyway-managed inside the `server` submodule. On server
+> boot, Flyway applies `V1`–`V4`: `user_profile`, `saved_numbers`,
+> `saved_simulations` (V3), `feedback` (V4). `db/init-schemas.sh` only creates
+> the schema, not these tables.
+
+## Redis
+
+```bash
+# Connect to Redis
+docker compose exec redis redis-cli
+# Check health
+docker compose exec redis redis-cli ping     # PONG
+# Inspect active stream channels
+docker compose exec redis redis-cli PUBSUB CHANNELS "agent:stream:*"
+# Check memory usage
+docker compose exec redis redis-cli INFO memory | grep used_memory_human
+```
+
+- Redis is an ephemeral pub/sub relay for agent SSE streaming
+  (`agent:stream:{thread_id}`); it holds no persistent application state.
+- Both `server` and `agent` gate startup on `redis: service_healthy`. If Redis
+  is down, both services still start and fall back to inline SSE for
+  `/api/agent/chat/stream` (the BFF reads the agent's SSE stream directly).
+- `maxmemory 256mb` with `allkeys-lru` eviction — evicted keys are safe
+  (streams are short-lived).
+
 ## Running Tests
 
 The Makefile wraps each service's test command (`make test-go`, `make test-java`,
@@ -150,6 +176,19 @@ make scale-server N=3      # one service to N
 
 - Traefik rate limiting is active. Reduce request frequency.
 - Adjust limits in `proxy/dynamic.yml` (per-minute averages/bursts).
+
+### Agent SSE stream stalls / Redis relay issues
+
+- If `/api/agent/chat/stream` returns no events, check Redis health
+  (`docker compose exec redis redis-cli ping`). Both the agent and BFF fall
+  back to inline SSE when Redis is unavailable, so a stream still works but
+  may be slower to start.
+- The BFF's Redis relay has a 300s idle watchdog — if no event arrives in 300s
+  the stream completes with an `error` event. Long-running LLM token streams
+  on small local models are expected; the watchdog only fires on true stalls.
+- The agent publishes events with the JSON field `event` (not `type`); the BFF
+  reads `event.get("event")` and uses it as the SSE event name. If you change
+  one side, update the other (`AgentClientService` / `app/main.py`).
 
 ### Proto changes
 When modifying `proto/lottery.proto` (the single source of truth for the

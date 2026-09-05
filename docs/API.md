@@ -5,11 +5,11 @@ Traefik. The UI never calls the Go service directly.
 
 ## Authentication
 
-| Endpoint             | Method | Auth | Description                                                           |
-|----------------------|--------|------|-----------------------------------------------------------------------|
-| `/api/auth/verify`   | GET    | No   | Traefik ForwardAuth target. Returns 200 if the Bearer token is valid. |
-| `/api/me`            | GET    | Yes  | Returns the authenticated user's profile (incl. persisted archive window). |
-| `/api/me/archive`    | PUT    | Yes  | Update the user's preferred archive date range (persisted across sessions). |
+| Endpoint               | Method   | Auth   | Description                                                                 |
+|------------------------|----------|--------|-----------------------------------------------------------------------------|
+| `/api/auth/verify`     | GET      | No     | Traefik ForwardAuth target. Returns 200 if the Bearer token is valid.       |
+| `/api/me`              | GET      | Yes    | Returns the authenticated user's profile (incl. persisted archive window).  |
+| `/api/me/archive`      | PUT      | Yes    | Update the user's preferred archive date range (persisted across sessions). |
 
 ### GET /api/me
 
@@ -44,21 +44,21 @@ or blank to clear it (fall back to defaults).
 }
 ```
 
-| Field   | Type   | Required | Notes                                                          |
-|---------|--------|----------|----------------------------------------------------------------|
-| `from`  | string | no       | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults). |
-| `to`    | string | no       | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults). |
+| Field     | Type     | Required   | Notes                                                            |
+|-----------|----------|------------|------------------------------------------------------------------|
+| `from`    | string   | no         | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults).   |
+| `to`      | string   | no         | `YYYY-MM-DD` (validated). `null`/blank = clear (use defaults).   |
 
 Response: identical to [`GET /api/me`](#get-apime) with the updated window.
 
 ## Lottery Computation (proxied to Go via gRPC)
 
-| Endpoint                    | Method | Auth | Description                                    |
-|-----------------------------|--------|------|------------------------------------------------|
-| `/api/generate/form`        | POST   | Yes  | Generate lottery number combinations.          |
-| `/api/generate/statistics`  | POST   | Yes  | Calculate frequent pairs/groups.               |
-| `/api/generate/analyze`     | POST   | Yes  | Analyze user-selected numbers.                 |
-| `/api/generate/simulate`    | POST   | Yes  | Backtest a ticket against historical draws.    |
+| Endpoint                      | Method   | Auth   | Description                                      |
+|-------------------------------|----------|--------|--------------------------------------------------|
+| `/api/generate/form`          | POST     | Yes    | Generate lottery number combinations.            |
+| `/api/generate/statistics`    | POST     | Yes    | Calculate frequent pairs/groups.                 |
+| `/api/generate/analyze`       | POST     | Yes    | Analyze user-selected numbers.                   |
+| `/api/generate/simulate`      | POST     | Yes    | Backtest a ticket against historical draws.      |
 
 ### POST /api/generate/form
 
@@ -139,13 +139,13 @@ combinations are played per draw.
 }
 ```
 
-| Field           | Type             | Required | Notes                                                                |
-|-----------------|------------------|----------|----------------------------------------------------------------------|
-| `form`          | `number[]`       | yes      | 6, 8, 10, or 12 numbers (systematic forms).                          |
-| `strong`        | `number`         | no       | Strong number 1–7. `0`/omitted = no strong number.                   |
-| `from`/`to`     | `date` (ISO)     | no       | Historical window. Omit = full archive.                              |
-| `ticketCost`    | `number`         | no       | Ticket cost per combination (ILS). Default 3.0.                      |
-| `prizeAmounts`  | `number[]`       | no       | Len 0/8. Per-tier ILS overrides. 0=tier 1 (6+strong) … 7=tier 8 (3). |
+| Field             | Type               | Required   | Notes                                                                  |
+|-------------------|--------------------|------------|------------------------------------------------------------------------|
+| `form`            | `number[]`         | yes        | 6, 8, 10, or 12 numbers (systematic forms).                            |
+| `strong`          | `number`           | no         | Strong number 1–7. `0`/omitted = no strong number.                     |
+| `from`/`to`       | `date` (ISO)       | no         | Historical window. Omit = full archive.                                |
+| `ticketCost`      | `number`           | no         | Ticket cost per combination (ILS). Default 3.0.                        |
+| `prizeAmounts`    | `number[]`         | no         | Len 0/8. Per-tier ILS overrides. 0=tier 1 (6+strong) … 7=tier 8 (3).   |
 
 Response:
 
@@ -185,11 +185,11 @@ Response:
 
 ## Saved Numbers (owned by Java BFF)
 
-| Endpoint                    | Method | Auth | Description                          |
-|-----------------------------|--------|------|--------------------------------------|
-| `/api/user/numbers`         | GET    | Yes  | List the user's saved number sets.   |
-| `/api/user/numbers`         | POST   | Yes  | Save a new set of numbers.           |
-| `/api/user/numbers/{id}`    | DELETE | Yes  | Delete a saved set.                  |
+| Endpoint                      | Method   | Auth   | Description                            |
+|-------------------------------|----------|--------|----------------------------------------|
+| `/api/user/numbers`           | GET      | Yes    | List the user's saved number sets.     |
+| `/api/user/numbers`           | POST     | Yes    | Save a new set of numbers.             |
+| `/api/user/numbers/{id}`      | DELETE   | Yes    | Delete a saved set.                    |
 
 ### POST /api/user/numbers
 
@@ -203,6 +203,104 @@ Response:
 }
 ```
 
+## Saved Simulations (owned by Java BFF)
+
+Per-user CRUD for bookmarked Simulate backtest results. Each entry stores the
+original request JSON and the aggregated summary JSON, so a saved run can be
+restored in the Simulate tab without re-running the backtest. Owned by the Java
+BFF (`app.saved_simulations`, Flyway `V3`).
+
+| Endpoint                         | Method   | Auth   | Description                            |
+|----------------------------------|----------|--------|----------------------------------------|
+| `/api/user/simulations`          | GET      | Yes    | List the user's saved simulations.     |
+| `/api/user/simulations`          | POST     | Yes    | Save a simulation result.              |
+| `/api/user/simulations/{id}`     | DELETE   | Yes    | Delete a saved simulation.             |
+
+### POST /api/user/simulations
+
+```json
+{
+  "requestJson": "{\"form\":[1,8,11,21,25,26],\"from\":\"2024-01-01\",\"to\":\"2024-12-31\"}",
+  "summaryJson": "{\"totalDraws\":312,\"totalSpent\":936.0,\"totalWon\":142.0,\"net\":-794.0}"
+}
+```
+
+| Field            | Type     | Required   | Notes                                                         |
+|------------------|----------|------------|---------------------------------------------------------------|
+| `requestJson`    | string   | yes        | JSON-encoded original Simulate request.                       |
+| `summaryJson`    | string   | yes        | JSON-encoded Simulate summary (spend, winnings, per-tier).    |
+
+Response (`SavedSimulationResponse`):
+
+```json
+{
+  "id": 7,
+  "requestJson": "{...}",
+  "summaryJson": "{...}",
+  "createdAt": "2026-09-05T12:34:56Z"
+}
+```
+
+> `requestJson`/`summaryJson` are stored as JSONB columns. Deletion is scoped to
+> the authenticated user's `user_sub`.
+
+## Feedback (owned by Java BFF)
+
+Users submit feedback or lottery suggestions; admins view, filter by status, and
+delete. Owned by the Java BFF (`app.feedback`, Flyway `V4`). Status values:
+`new` (default), `read`, `archived`.
+
+| Endpoint                         | Method   | Auth     | Description                                               |
+|----------------------------------|----------|----------|-----------------------------------------------------------|
+| `/api/feedback`                  | POST     | Yes      | Submit feedback or a lottery suggestion.                  |
+| `/api/feedback`                  | GET      | ADMIN    | List all feedback entries.                                |
+| `/api/feedback/{id}/status`      | PUT      | ADMIN    | Update an entry's status (`?status=new\|read\|archived`). |
+| `/api/feedback/{id}`             | DELETE   | ADMIN    | Delete a feedback entry.                                  |
+
+### POST /api/feedback
+
+```json
+{
+  "type": "suggestion",
+  "message": "Add a hot/cold toggle to the Lab",
+  "page": "/lab",
+  "language": "he",
+  "tier": "paid",
+  "extra": null
+}
+```
+
+| Field        | Type     | Required   | Notes                                                            |
+|--------------|----------|------------|------------------------------------------------------------------|
+| `type`       | string   | yes        | Free-form category (e.g. `general`, `suggestion`, `bug`).        |
+| `message`    | string   | yes        | The feedback text.                                               |
+| `page`       | string   | no         | UI page/context the feedback was submitted from.                 |
+| `language`   | string   | no         | UI language at submission time (`he` / `en`).                    |
+| `tier`       | string   | no         | User's tier at submission time.                                  |
+| `extra`      | string   | no         | JSONB blob for additional structured context.                    |
+
+Response (`FeedbackResponse`):
+
+```json
+{
+  "id": 12,
+  "userSub": "f:google-1234:abc",
+  "type": "suggestion",
+  "status": "new",
+  "page": "/lab",
+  "language": "he",
+  "tier": "paid",
+  "message": "Add a hot/cold toggle to the Lab",
+  "extra": null,
+  "createdAt": "2026-09-05T12:34:56Z"
+}
+```
+
+### PUT /api/feedback/{id}/status?status=read
+
+Updates the status of a feedback entry. Allowed values: `new`, `read`,
+`archived`. Returns the updated `FeedbackResponse`.
+
 ## AI Agent (proxied to Python via HTTP)
 
 All agent endpoints live under `/api/agent/*` on the Java BFF, which forwards
@@ -211,16 +309,16 @@ network. The UI never calls the Python service directly. Chat/approve return
 the agent's JSON; admin endpoints are gated by the `ADMIN` role
 (`@PreAuthorize("hasRole('ADMIN')")`).
 
-| Endpoint                              | Method | Auth   | Description                                      |
-|---------------------------------------|--------|--------|--------------------------------------------------|
-| `/api/agent/chat`                     | POST   | Yes    | Send a message to the agent (may pause for HITL).|
-| `/api/agent/chat/stream`              | POST   | Yes    | SSE streaming variant of `/chat` (text/event-stream). |
-| `/api/agent/approve`                  | POST   | Yes    | Approve/reject a paused write-tool action.       |
-| `/api/agent/health`                   | GET    | No     | Proxied agent liveness (`/healthz` on agent).    |
-| `/api/agent/sessions`                 | GET    | Yes    | List the caller's agent sessions.                |
-| `/api/agent/sessions/{sessionId}`     | GET    | Yes    | Get one session's history.                       |
-| `/api/agent/sessions/{sessionId}`     | DELETE | Yes    | Delete one session.                              |
-| `/api/agent/sessions`                 | DELETE | Yes    | Delete all of the caller's sessions.             |
+| Endpoint                                | Method   | Auth     | Description                                           |
+|-----------------------------------------|----------|----------|-------------------------------------------------------|
+| `/api/agent/chat`                       | POST     | Yes      | Send a message to the agent (may pause for HITL).     |
+| `/api/agent/chat/stream`                | POST     | Yes      | SSE streaming variant of `/chat` (text/event-stream). |
+| `/api/agent/approve`                    | POST     | Yes      | Approve/reject a paused write-tool action.            |
+| `/api/agent/health`                     | GET      | No       | Proxied agent liveness (`/healthz` on agent).         |
+| `/api/agent/sessions`                   | GET      | Yes      | List the caller's agent sessions.                     |
+| `/api/agent/sessions/{sessionId}`       | GET      | Yes      | Get one session's history.                            |
+| `/api/agent/sessions/{sessionId}`       | DELETE   | Yes      | Delete one session.                                   |
+| `/api/agent/sessions`                   | DELETE   | Yes      | Delete all of the caller's sessions.                  |
 
 ### POST /api/agent/chat
 
@@ -235,14 +333,14 @@ the agent's JSON; admin endpoints are gated by the `ADMIN` role
 }
 ```
 
-| Field        | Type     | Notes                                                                      |
-|--------------|----------|----------------------------------------------------------------------------|
-| `session_id` | string   | Required. LangGraph thread id; reused across chat + approve.              |
-| `message`    | string   | Required. User utterance.                                                  |
-| `intent`     | string   | Optional hint for the supervisor router.                                   |
-| `context`    | object   | Optional structured UI context (page, selected numbers, groupSize).       |
-| `config_id`  | integer  | Optional. Override the active LLM with a stored config for this request only. |
-| `lang`       | string   | Optional. Language hint (`he` / `en`) forwarded to workers.                |
+| Field          | Type       | Notes                                                                         |
+|----------------|------------|-------------------------------------------------------------------------------|
+| `session_id`   | string     | Required. LangGraph thread id; reused across chat + approve.                  |
+| `message`      | string     | Required. User utterance.                                                     |
+| `intent`       | string     | Optional hint for the supervisor router.                                      |
+| `context`      | object     | Optional structured UI context (page, selected numbers, groupSize).           |
+| `config_id`    | integer    | Optional. Override the active LLM with a stored config for this request only. |
+| `lang`         | string     | Optional. Language hint (`he` / `en`) forwarded to workers.                   |
 
 Response (normal completion):
 
@@ -267,24 +365,32 @@ Response (agent paused for human approval of a write tool):
 ### POST /api/agent/chat/stream
 
 SSE streaming variant of `/api/agent/chat`. Same request body, but the response
-is `text/event-stream` — the Java BFF opens a no-read-timeout `HttpClient`
-connection to the agent's `/chat/stream` and relays SSE events as they arrive.
-The emitter does not time out (LLM token streams can be long-running on small
-local models).
+is `text/event-stream`. Two relay paths:
+
+- **Redis pub/sub (preferred):** the agent runs the graph in a background
+  thread, publishes progress events to the Redis channel
+  `agent:stream:{thread_id}`, and returns immediately with JSON
+  `{"thread_id": ..., "channel": "agent:stream:..."}`. The Java BFF subscribes
+  to that channel and re-emits each event as an SSE event (event name taken
+  from the JSON `event` field). The emitter does not time out (LLM token
+  streams can be long-running on small local models); a 300s idle watchdog
+  completes the stream with an `error` event if no event arrives.
+- **Inline SSE (fallback):** when Redis is unavailable, the BFF opens a
+  no-read-timeout `HttpClient` connection to the agent's `/chat/stream` and
+  relays SSE events as they arrive.
 
 Request body: identical to [`POST /api/agent/chat`](#post-apiagentchat).
 
-SSE event types (relayed from the agent):
+SSE event names (the JSON `event` field; relayed as the SSE event name):
 
-| Event `type` | Description                                                  |
-|--------------|--------------------------------------------------------------|
-| `token`      | LLM output token (partial response text).                    |
-| `tool`       | Tool call started / completed (name + args + result).        |
-| `hitl`       | Agent paused for human approval (`{ tool, args }`).          |
-| `done`       | Stream complete (`{ thread_id, paused }`).                   |
-| `error`      | Error during generation (`{ message }`).                     |
+| Event `event`   | Payload                                | Description                                                    |
+|-----------------|----------------------------------------|----------------------------------------------------------------|
+| `progress`      | `{ node, label }`                      | Emitted after each graph node completes (incremental).         |
+| `paused`        | `{ thread_id }`                        | Agent paused for HITL approval of a write tool.                |
+| `done`          | `{ response, thread_id }`              | Stream complete with the final response.                       |
+| `error`         | `{ message }`                          | Error during generation (`{error_type}: {error_msg}`).         |
 
-> When a `hitl` event arrives, the UI calls `POST /api/agent/approve` with the
+> When a `paused` event arrives, the UI calls `POST /api/agent/approve` with the
 > same `session_id`; the agent resumes and may open a new stream or return the
 > final result synchronously.
 
@@ -305,22 +411,22 @@ tool argument when the user modifies the proposed action before approving.
 
 All endpoints below require the `ADMIN` role.
 
-| Endpoint                                  | Method | Description                                              |
-|-------------------------------------------|--------|----------------------------------------------------------|
-| `/api/agent/llm-config`                   | GET    | Current active LLM provider/model/settings.             |
-| `/api/agent/llm-config`                   | PUT    | Update the active LLM configuration.                    |
-| `/api/agent/llm-configs`                  | GET    | List all stored LLM configurations.                     |
-| `/api/agent/llm-configs`                  | POST   | Create a new stored LLM configuration.                  |
-| `/api/agent/llm-configs/{configId}`       | PUT    | Update a stored configuration (name, provider, model, base_url, api_key, timeout). |
-| `/api/agent/llm-configs/{configId}/activate` | PUT | Activate a stored configuration by id.                  |
-| `/api/agent/llm-configs/{configId}/test`  | POST   | Smoke-test a stored configuration.                      |
-| `/api/agent/llm-configs/{configId}`       | DELETE | Delete a stored configuration.                          |
-| `/api/agent/llm-models?provider=ollama&base_url=...` | GET | List models available from a provider (optional `base_url` to query a non-default endpoint). |
-| `/api/agent/free-llm`                     | GET    | Read the free-tier LLM toggle (whether free users get LLM or a canned response). |
-| `/api/agent/free-llm`                     | PUT    | Set the free-tier LLM toggle (`{ "enabled": true }`).   |
-| `/api/agent/token-usage`                  | GET    | Per-user token consumption (from `agent.token_usage`).  |
-| `/api/agent/audit-log?limit=50`           | GET    | Agent action history (from `agent.audit_log`).          |
-| `/api/agent/reindex`                      | POST   | Rebuild the pgvector RAG embeddings.                    |
+| Endpoint                                             | Method   | Description                                                                                  |
+|------------------------------------------------------|----------|----------------------------------------------------------------------------------------------|
+| `/api/agent/llm-config`                              | GET      | Current active LLM provider/model/settings.                                                  |
+| `/api/agent/llm-config`                              | PUT      | Update the active LLM configuration.                                                         |
+| `/api/agent/llm-configs`                             | GET      | List all stored LLM configurations.                                                          |
+| `/api/agent/llm-configs`                             | POST     | Create a new stored LLM configuration.                                                       |
+| `/api/agent/llm-configs/{configId}`                  | PUT      | Update a stored configuration (name, provider, model, base_url, api_key, timeout).           |
+| `/api/agent/llm-configs/{configId}/activate`         | PUT      | Activate a stored configuration by id.                                                       |
+| `/api/agent/llm-configs/{configId}/test`             | POST     | Smoke-test a stored configuration.                                                           |
+| `/api/agent/llm-configs/{configId}`                  | DELETE   | Delete a stored configuration.                                                               |
+| `/api/agent/llm-models?provider=ollama&base_url=...` | GET      | List models available from a provider (optional `base_url` to query a non-default endpoint). |
+| `/api/agent/free-llm`                                | GET      | Read the free-tier LLM toggle (whether free users get LLM or a canned response).             |
+| `/api/agent/free-llm`                                | PUT      | Set the free-tier LLM toggle (`{ "enabled": true }`).                                        |
+| `/api/agent/token-usage`                             | GET      | Per-user token consumption (from `agent.token_usage`).                                       |
+| `/api/agent/audit-log?limit=50`                      | GET      | Agent action history (from `agent.audit_log`).                                               |
+| `/api/agent/reindex`                                 | POST     | Rebuild the pgvector RAG embeddings.                                                         |
 
 ### PUT /api/agent/llm-config
 
@@ -354,10 +460,10 @@ Response:
 
 ## Health & Observability
 
-| Endpoint                | Service | Description            |
-|-------------------------|---------|------------------------|
-| `/actuator/health`      | Java    | Liveness/readiness     |
-| `/api/agent/health`     | Java    | Proxied agent liveness |
-| `/health`               | Go      | Liveness               |
-| `/healthz`              | Agent   | Liveness (internal)    |
-| `/realms/statistiloto`  | Keycloak| OIDC issuer            |
+| Endpoint                  | Service   | Description              |
+|---------------------------|-----------|--------------------------|
+| `/actuator/health`        | Java      | Liveness/readiness       |
+| `/api/agent/health`       | Java      | Proxied agent liveness   |
+| `/health`                 | Go        | Liveness                 |
+| `/healthz`                | Agent     | Liveness (internal)      |
+| `/realms/statistiloto`    | Keycloak  | OIDC issuer              |

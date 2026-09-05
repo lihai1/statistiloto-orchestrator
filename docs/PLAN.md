@@ -12,6 +12,7 @@ Rebuild the Statistiloto Israeli-lottery analysis product as a containerized mic
 ## Product intent & goals (carried over from the original POC)
 
 Statistiloto helps users analyze the Israeli lottery by:
+
 1. **Generating** lottery number combinations from historical-draw patterns.
 2. **Calculating statistics** — frequent number pairs/groups over a date range.
 3. **Analyzing** user-selected numbers against historical winning draws.
@@ -40,6 +41,7 @@ flowchart LR
 ```
 
 Notes:
+
 - One PostgreSQL container, **three logical schemas**: `keycloak` (managed by Keycloak), `app` (Java BFF: user profiles, saved numbers), `lottery` (Go: `lottery_results`). Clean ownership, no shared tables.
 - Java↔Go over **gRPC** with a **shared `/proto` contract** at repo root; both services generate stubs from it.
 - Go service exposes its REST gateway too (kept from `stat-tree-server`) for direct debugging/admin, but the UI only talks to the Java BFF (BFF pattern) through Traefik.
@@ -48,7 +50,7 @@ Notes:
 
 ## Services & folder layout (`statistiloto-new/`)
 
-```
+```text
 statistiloto-new/
 ├── docker-compose.yml            # orchestrates all 6 services + networks/volumes
 ├── .env.example                  # all config (DB creds, Keycloak, JWT, ports)
@@ -64,6 +66,7 @@ statistiloto-new/
 ```
 
 ### 1. `ui/` — Angular 21 PWA (new)
+
 - **Starter**: `ng new ui --standalone --routing --style=scss --strict` (Angular 21, standalone, zoneless, signals, esbuild).
 - **Stack**: Angular Material 3 + Tailwind v4, `@jsverse/transloco` (i18n — preserve Hebrew UI), `keycloak-js` (OIDC authorization-code + PKCE), Angular `HttpClient` with a JWT interceptor, signals for state.
 - **Tests**: Vitest (Angular 21 default) + Playwright E2E; ESLint + Prettier.
@@ -72,15 +75,18 @@ statistiloto-new/
 - **Build**: multi-stage Dockerfile (node build → nginx serve static; nginx not the edge proxy, Traefik is).
 
 ### 2. `server/` — Java Spring Boot BFF (new)
+
 - **Starter**: Spring Initializr → Spring Boot 3.5.x, Java 21, Gradle (Kotlin DSL) or Maven, dependencies: web, security, oauth2-resource-server, data-jpa, validation, actuator, flyway, postgresql, grpc-stubs, openapi.
 - **Role**: BFF for the UI. Owns user app data (saved numbers/forms, preferences). Calls Go via gRPC for all algorithm work. Validates Keycloak JWTs itself (Spring Security OAuth2 Resource Server, JWKS from Keycloak) — defense in depth.
 - **Package layout** (clean, record-based DTOs):
   `config/ · controller/ · dto/{request,response} · entity/ · repository/ · service/ · security/ · grpc/client/ · exception/`
+
 - **DB schema `app`** (Flyway): `user_profile` (id=Keycloak sub, display name), `saved_numbers` (id, user_sub, category, numbers jsonb, will_be jsonb, date_range, created_at). No passwords — Keycloak owns identity.
 - **Endpoints** (REST, behind Traefik `/api/*`): `POST /api/generate/form`, `POST /api/generate/statistics`, `POST /api/generate/analyze` (proxy to Go via gRPC and persist results on behalf of user), `GET/POST/DELETE /api/user/numbers` (CRUD saved numbers), `GET /api/me`.
 - **gRPC client** to Go generated from `proto/lottery.proto`.
 
 ### 3. `lottery-stats-server/` — Go algorithm service (reused)
+
 - **Source**: git submodule of `github.com/lihai1/stat-tree-server` (continue dev there). Take its good practices (Makefile, REST+gRPC, Ginkgo integration tests, Liquibase) as conventions for the other services.
 - **Adaptations** (the "adapt" part):
   - **Drop its own JWT auth + `users`/`saved_forms` tables** — identity moves to Keycloak; user app data moves to the Java BFF. Go becomes **stateless compute + `lottery_results` storage**.
@@ -91,11 +97,13 @@ statistiloto-new/
 - **API** (gRPC primary, REST gateway kept): `GenerateForm`, `GetStatistics`, `Analyze` — unchanged behavior, inputs/outputs per shared proto.
 
 ### 4. `auth/` — Keycloak (new container)
+
 - Image: `quay.io/keycloak/keycloak:latest`. Provision a `statistiloto` realm via `KC_IMPORT` / realm-export JSON in `auth/realm-statistiloto.json` (clients: `statistiloto-ui` (public, PKCE), `statistiloto-server` (confidential), roles: `USER`, `ADMIN`).
 - Owns users, credentials, refresh tokens, password policies. Stateless (in-memory sessions, sticky not required for short-lived).
 - Postgres as its DB (schema `keycloak`).
 
 ### 5. `proxy/` — Traefik edge (new container)
+
 - Image: `traefik:v3`. TLS termination, Docker provider (auto-discovery via labels).
 - **Edge JWT validation**: Traefik JWT/ForwardAuth middleware validates Keycloak access tokens for `/api/*` and `/lottery/*` before forwarding; rejects early.
 - **Rate limiting**: per-IP and per-route token buckets (e.g. auth endpoints strict, generate endpoints moderate) via Traefik `rateLimit` middleware.
@@ -103,6 +111,7 @@ statistiloto-new/
 - Config in `proxy/traefik.yml` + `proxy/dynamic.yml`.
 
 ### 6. `db/` — PostgreSQL (container)
+
 - Image: `postgres:16-alpine`. Init script `db/init.sql` creates schemas `keycloak`, `app`, `lottery` and grants. Seed mount for `lotto.data`.
 - Volume for persistence; healthcheck.
 

@@ -2,7 +2,7 @@
 
 A modernized, stateless, horizontally scalable, and secured reimplementation of the
 [Statistiloto](https://github.com/lihai1) Israeli-lottery analysis platform.
-Eight containerized services orchestrated by Docker Compose, with five application
+Nine containerized services orchestrated by Docker Compose, with five application
 submodules managed via git.
 
 ## Architecture
@@ -29,6 +29,7 @@ flowchart TB
     subgraph Platform
         Auth[Keycloak 25<br/>OIDC · JWT issuance]
         DB[(PostgreSQL 16<br/>pgvector<br/>schemas: keycloak · app · lottery · agent)]
+        Redis[(Redis 7.4<br/>pub/sub streaming relay)]
     end
 
     Browser -->|HTTP (dev) / HTTPS (prod)| Proxy
@@ -44,6 +45,8 @@ flowchart TB
     Lottery -->|pgx| DB
     Agent -->|psycopg| DB
     Auth -->|JDBC| DB
+    Agent -->|publish| Redis
+    Server -->|subscribe| Redis
     Lottery -.->|scheduled scraper| Web[(Israeli lottery site)]
 ```
 
@@ -59,15 +62,19 @@ flowchart TB
 | `ollama`  | Ollama 0.32.5               | — (official image)                                        | 11434         | —                       |
 | `auth`    | Keycloak 25                 | — (realm export in `auth/`)                               | 8080          | `keycloak`              |
 | `db`      | PostgreSQL 16 + pgvector    | — (init scripts in `db/`)                                 | 5432          | shared (4 schemas)      |
+| `redis`   | Redis 7.4 (alpine)          | — (official image)                                        | 6379 (internal) | —                     |
 
 ### Data Ownership
 
 Each service owns its own PostgreSQL schema — no shared tables, boundaries enforced by schema:
 
 - **Keycloak** (`keycloak`) — users, credentials, sessions, realm data.
-- **Java BFF** (`app`) — user profiles, saved numbers (Flyway-managed).
+- **Java BFF** (`app`) — user profiles, saved numbers, saved simulations, feedback
+  (Flyway-managed: `user_profile`, `saved_numbers`, `saved_simulations`, `feedback`).
 - **Go service** (`lottery`) — `lottery_results` table (historical draws, scraper-managed).
 - **Python agent** (`agent`) — `token_usage`, `audit_log`, `llm_config`, `embeddings` (pgvector).
+- **Redis** — ephemeral pub/sub channel for async agent SSE streaming relay
+  (`agent:stream:{thread_id}`); no persistent application state.
 
 ## Features
 
@@ -80,12 +87,24 @@ Each service owns its own PostgreSQL schema — no shared tables, boundaries enf
   counts, and per-draw results. Prize amounts use scraped per-draw data when
   available (`lottery_results.prize_amounts`), falling back to defaults or
   user-supplied overrides.
-- **Saved Numbers** — per-user CRUD for generated/favorite sets.
+- **Saved Numbers** — per-user CRUD for generated/favorite sets, with duplicate
+  detection (internal dups + exact-set dups per category) and shareable sets
+  (per-set share link from the Number Wallet).
+- **Saved Simulations** — bookmark a Simulate backtest (request + summary JSON) per
+  user via `/api/user/simulations` (CRUD); restore from the Simulate tab.
+- **Feedback** — users submit feedback or lottery suggestions (`/api/feedback`);
+  admins view, filter by status (`new`/`read`/`archived`), and delete via the
+  admin Feedback viewer.
 - **AI Assistant** — LangGraph agent (SSE streaming) with lottery tools, RAG, and
   human-in-the-loop approval on write tools. Per-request LLM override
-  (`config_id`) and language hint (`lang`) on chat.
+  (`config_id`) and language hint (`lang`) on chat. Multi-request detection asks
+  the user to pick one operation (with a generate-then-save exemption). Streaming
+  is relayed through Redis pub/sub when available (`agent:stream:{thread_id}`
+  channel) with an inline SSE fallback.
 - **Admin** — runtime LLM configuration (stored configs CRUD + activate/test),
-  free-tier LLM toggle, token usage, audit log, scraper control, RAG reindex.
+  free-tier LLM toggle, token usage, audit log, scraper control, RAG reindex,
+  feedback viewer, and agent admin tools (web search, DB table listing, ad-hoc
+  SQL queries via the small-model admin-ops guard).
 - **Social Login** — optional Google and Facebook sign-in via Keycloak identity
   providers. Credentials are injected via `.env` (`GOOGLE_CLIENT_ID/SECRET`,
   `FACEBOOK_CLIENT_ID/SECRET`); leave empty to disable (buttons appear but

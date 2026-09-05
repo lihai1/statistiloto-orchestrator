@@ -5,7 +5,7 @@
 Statistiloto-New is a modernized, stateless, horizontally scalable
 reimplementation of the legacy Statistiloto lottery-analysis project.
 
-```
+```text
                 ┌────────────┐
                 │   Browser  │
                 └─────┬──────┘
@@ -35,20 +35,31 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
                 │ keycloak / app /       │
                 │ lottery / agent        │
                 └────────────────────────┘
+
+  Agent SSE streaming relay:
+  ┌──────────┐  publish   ┌──────────┐  subscribe  ┌──────────┐
+  │  Agent   │──────────▶│  Redis   │───────────▶│ Java BFF │──▶ SSE
+  │ /chat/   │            │ pub/sub  │            │ /api/    │
+  │ stream   │            │ agent:   │            │ agent/   │
+  └──────────┘            │ stream:* │            │ chat/    │
+                          └──────────┘            │ stream   │
+                                                  └──────────┘
+  (Falls back to inline SSE when Redis is unavailable.)
 ```
 
 ## Services
 
-| Service  | Tech                  | Owns                                   | Port(s)      |
-|----------|-----------------------|----------------------------------------|--------------|
-| `proxy`  | Traefik v3.2          | Edge routing, TLS (prod), rate limiting, ForwardAuth | 80 (dev), 443 (prod) |
-| `ui`     | Angular 20 PWA + Nginx| Static UI (built from `ui-fable/` submodule) | 80 (internal)|
-| `server` | Spring Boot 3.5 / Java 21 | App data (`app` schema), BFF REST, agent proxy | 8082     |
-| `lottery`| Go 1.25               | Lottery results + algorithm + Simulate backtest (`lottery` schema, incl. `prize_amounts`) | 8080, 9090 |
-| `agent`  | Python 3.12 / LangGraph | Agent data (`agent` schema): `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, pgvector `embeddings`; free-tier LLM toggle | 8000 (internal) |
-| `ollama` | Ollama 0.32.5         | Local LLM inference (serial)           | 11434 (internal) |
-| `auth`   | Keycloak 25           | Identity, JWT issuance (`keycloak` schema) | 8080 (internal) |
-| `db`     | PostgreSQL 16 + pgvector | Shared instance, four logical schemas | 5432         |
+| Service   | Tech                      | Owns                                                                                                                                 | Port(s)              |
+|-----------|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------|----------------------|
+| `proxy`   | Traefik v3.2              | Edge routing, TLS (prod), rate limiting, ForwardAuth                                                                                 | 80 (dev), 443 (prod) |
+| `ui`      | Angular 20 PWA + Nginx    | Static UI (built from `ui-fable/` submodule)                                                                                         | 80 (internal)        |
+| `server`  | Spring Boot 3.5 / Java 21 | App data (`app` schema), BFF REST, agent proxy                                                                                       | 8082                 |
+| `lottery` | Go 1.25                   | Lottery results + algorithm + Simulate backtest (`lottery` schema, incl. `prize_amounts`)                                            | 8080, 9090           |
+| `agent`   | Python 3.12 / LangGraph   | Agent data (`agent` schema): `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, pgvector `embeddings`; free-tier LLM toggle  | 8000 (internal)      |
+| `ollama`  | Ollama 0.32.5             | Local LLM inference (serial)                                                                                                         | 11434 (internal)     |
+| `auth`    | Keycloak 25               | Identity, JWT issuance (`keycloak` schema)                                                                                           | 8080 (internal)      |
+| `db`      | PostgreSQL 16 + pgvector  | Shared instance, four logical schemas                                                                                                | 5432                 |
+| `redis`   | Redis 7.4 (alpine)        | Ephemeral pub/sub relay for agent SSE streaming (`agent:stream:{thread_id}`); no persistent state. `maxmemory 256mb`, `allkeys-lru`. | 6379 (internal)      |
 
 > Only `proxy` exposes external ports (80 dev / 443 prod). Every other
 > service is reachable only on the private `statistiloto-net` Docker network.
@@ -58,12 +69,16 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 ## Data Ownership
 
 - **Keycloak** owns identity/authentication data (`keycloak` schema).
-- **Java BFF** owns application data: saved numbers, user profiles (`app` schema).
+- **Java BFF** owns application data: saved numbers, user profiles, saved
+  simulations, feedback (`app` schema). Tables (Flyway-managed):
+  `user_profile`, `saved_numbers`, `saved_simulations` (V3), `feedback` (V4).
 - **Go service** owns lottery historical results and computation (`lottery` schema):
   `lottery_results` (including the `prize_amounts` JSONB column populated by the
   prize scraper, used by Simulate for real per-draw prize data).
 - **Python agent** owns LLM telemetry and RAG state (`agent` schema):
   `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, and pgvector `embeddings`.
+- **Redis** holds no persistent application state — only ephemeral pub/sub
+  channels for async agent SSE streaming relay.
 - No service shares tables with another. Boundaries are enforced by schema.
 
 ## Authentication Flow

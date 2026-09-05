@@ -1,38 +1,42 @@
 # Statistiloto — Orchestrator Repo
 
-Monorepo orchestrating 8 Docker Compose services via 5 git submodules. This repo
+Monorepo orchestrating 9 Docker Compose services via 5 git submodules. This repo
 holds only orchestration: compose files, Traefik config, Keycloak realm, DB init,
 and a Makefile. All application code lives in submodules.
 
 ## Services (docker-compose.yml)
 
-| Service   | Image / Build                | Port  | Submodule         | DB schema |
-|-----------|------------------------------|-------|-------------------|-----------|
-| `proxy`   | traefik:v3.2                 | 80,443| — (config in `proxy/`) | — |
-| `ui`      | build `ui-fable/Dockerfile`  | 80    | `ui-fable/`       | — |
-| `server`  | build `server/Dockerfile`    | 8082  | `server/`         | `app` |
-| `lottery` | build `lottery-stats-server/Dockerfile` | 8080,9090 | `lottery-stats-server/` | `lottery` |
-| `agent`   | build `agent/Dockerfile`     | 8000  | `agent/`          | `agent` |
-| `ollama`  | ollama/ollama:0.32.5         | 11434 | —                 | — |
-| `auth`    | keycloak:25.0                | 8080  | — (realm in `auth/`) | `keycloak` |
-| `db`      | pgvector/pgvector:pg16       | 5432  | — (init in `db/`)  | shared (4 schemas) |
+| Service   | Image / Build                           | Port      | Submodule               | DB schema                        |
+|-----------|-----------------------------------------|-----------|-------------------------|----------------------------------|
+| `proxy`   | traefik:v3.2                            | 80,443    | — (config in `proxy/`)  | —                                |
+| `ui`      | build `ui-fable/Dockerfile`             | 80        | `ui-fable/`             | —                                |
+| `server`  | build `server/Dockerfile`               | 8082      | `server/`               | `app`                            |
+| `lottery` | build `lottery-stats-server/Dockerfile` | 8080,9090 | `lottery-stats-server/` | `lottery`                        |
+| `agent`   | build `agent/Dockerfile`                | 8000      | `agent/`                | `agent`                          |
+| `ollama`  | ollama/ollama:0.32.5                    | 11434     | —                       | —                                |
+| `auth`    | keycloak:25.0                           | 8080      | — (realm in `auth/`)    | `keycloak`                       |
+| `db`      | pgvector/pgvector:pg16                  | 5432      | — (init in `db/`)       | shared (4 schemas)               |
+| `redis`   | redis:7.4-alpine                        | 6379      | —                       | — (pub/sub, no persistent state) |
 
 Request flow: Browser → Traefik → (`/` ui, `/api/*` server, `/auth/*` auth).
 The agent is **not** exposed directly by Traefik — the UI reaches it through
 the Java BFF's `/api/agent/*` proxy (HTTP to the agent container on :8000).
 Server → gRPC :9090 → lottery. Agent → gRPC :9090 → lottery, HTTP → ollama,
 HTTP → server (tool calls); Server → HTTP :8000 → agent (chat/approve proxy).
+Agent SSE streaming is relayed through Redis pub/sub: the agent publishes
+events to `agent:stream:{thread_id}` and the Java BFF subscribes and re-emits
+them as SSE (falls back to inline SSE when Redis is unavailable).
 
 ## Submodules
 
-| Path                  | Repo                                          |
-|-----------------------|-----------------------------------------------|
-| `lottery-stats-server/` | `git@github.com:lihai1/stat-tree-server.git` |
-| `agent/`              | `git@github.com:lihai1/statistiloto-agent.git` |
-| `ui/`                 | `git@github.com:lihai1/statistiloto-ui.git`   |
-| `ui-fable/`           | `git@github.com:lihai1/statistiloto-ui-fable.git` |
-| `server/`             | `git@github.com:lihai1/statistiloto-server.git`|
-| `proto/`              | `git@github.com:lihai1/statistiloto-proto.git`|
+| Path                    | Repo                                              |
+|-------------------------|---------------------------------------------------|
+| `lottery-stats-server/` | `git@github.com:lihai1/stat-tree-server.git`      |
+| `agent/`                | `git@github.com:lihai1/statistiloto-agent.git`    |
+| `ui/`                   | `git@github.com:lihai1/statistiloto-ui.git`       |
+| `ui-fable/`             | `git@github.com:lihai1/statistiloto-ui-fable.git` |
+| `server/`               | `git@github.com:lihai1/statistiloto-server.git`   |
+| `proto/`                | `git@github.com:lihai1/statistiloto-proto.git`    |
 
 ## Common Makefile targets
 
@@ -111,7 +115,8 @@ Test users (change passwords in production):
 - WSL: if `docker` fails with permission errors, run once per session: `sudo usermod -aG docker "$(whoami)"` then reopen shell.
 - Prod compose (`docker-compose.prod.yml`) is an *override* on top of `docker-compose.yml`: it enables Traefik TLS on :443 (mounting `proxy/certs` + `traefik.prod.yml`/`dynamic.prod.yml`), switches Keycloak to `start` (prod mode), sets `restart: always`, adds `deploy.resources` limits, disables `LOTTERY_SEED_ON_BOOT`, and tightens the Ollama queue. It does **not** swap in pre-built registry images — `build:` contexts are still inherited from the base file.
 - ngrok compose (`docker-compose.ngrok.yml`) is an *override* on top of `docker-compose.yml`: it clears `KC_HOSTNAME` (so Keycloak uses the request `Host` header dynamically) and sets `KC_PROXY_HEADERS=xforwarded` so OIDC issuer/redirect URLs resolve to the public ngrok host. Run `ngrok http 80` separately — the override does not start the tunnel. Safe because ngrok terminates TLS, so Secure cookies are correct.
-- The Java BFF schema (`app`) is Flyway-managed inside the `server` submodule. `V2__add_archive_window_to_user_profile.sql` adds `archive_from`/`archive_to` columns to `app.user_profile` (persisted per-user archive date range). Flyway runs on server boot; `db/init-schemas.sh` only creates the schema, not these columns.
+- The Java BFF schema (`app`) is Flyway-managed inside the `server` submodule. `V2__add_archive_window_to_user_profile.sql` adds `archive_from`/`archive_to` columns to `app.user_profile` (persisted per-user archive date range). `V3__create_saved_simulations.sql` creates `app.saved_simulations` (bookmarked Simulate results per user). `V4__create_feedback.sql` creates `app.feedback` (user feedback + lottery suggestions, admin-managed). Flyway runs on server boot; `db/init-schemas.sh` only creates the schema, not these columns/tables.
+- Redis (`redis:7.4-alpine`) is shared by the Java BFF and the Python agent for async SSE streaming relay (pub/sub channel `agent:stream:{thread_id}`). It holds no persistent application state — `maxmemory 256mb`, `allkeys-lru`, `appendonly no`. Both `server` and `agent` gate startup on `redis: service_healthy`. The agent's `app/redis_client.py` and the BFF's `AgentClientService` degrade gracefully to inline SSE if Redis is unavailable (`REDIS_URL` unset or connection failure).
 
 ## Verification (full-stack feature)
 
