@@ -44,7 +44,7 @@ APP_SERVICES     := lottery server agent ui
         ps logs logs-% logs-follow \
         health wait \
         test test-go test-java test-ui test-agent test-e2e \
-        proto proto-go proto-java \
+        proto proto-go proto-java proto-python \
         lint lint-go lint-java lint-ui \
         shell-% \
         scale scale-% \
@@ -108,10 +108,41 @@ up:
 up-dev:
 	@$(MAKE) up ENV=dev
 
-# ngrok: start stack with Keycloak dynamic hostname so the public ngrok
-# URL works for OIDC login. Run `ngrok http 80` separately first.
+# ngrok: ensure tunnel is running, sync KEYCLOAK_ISSUER, start stack.
+# The ngrok tunnel runs on the host (not in Docker). If it's not running,
+# we start it. If the tunnel URL changed, we update docker-compose.ngrok.yml
+# so issuer validation matches the actual tunnel hostname.
 up-ngrok:
-	@echo "[up] Starting stack with ngrok override (dynamic Keycloak hostname)..."
+	@echo "[up-ngrok] Checking ngrok tunnel..."
+	@if ! curl -sf http://localhost:4040/api/tunnels >/dev/null 2>&1; then \
+		echo "[up-ngrok] ngrok not running. Starting: ngrok http 80"; \
+		nohup ngrok http 80 --log=stdout --log-format=logfmt >/tmp/ngrok.log 2>&1 & \
+		sleep 4; \
+		if ! curl -sf http://localhost:4040/api/tunnels >/dev/null 2>&1; then \
+			echo "[up-ngrok] ERROR: ngrok failed to start. Check /tmp/ngrok.log"; \
+			exit 1; \
+		fi; \
+		echo "[up-ngrok] ngrok started (log: /tmp/ngrok.log)"; \
+	else \
+		echo "[up-ngrok] ngrok already running"; \
+	fi
+	@TUNNEL_URL=$$(curl -sf http://localhost:4040/api/tunnels \
+		| python3 -c "import sys,json; d=json.load(sys.stdin); print(d['tunnels'][0]['public_url'])" 2>/dev/null); \
+	if [ -z "$$TUNNEL_URL" ]; then \
+		echo "[up-ngrok] ERROR: could not determine tunnel URL from ngrok API"; \
+		exit 1; \
+	fi; \
+	echo "[up-ngrok] Tunnel URL: $$TUNNEL_URL"; \
+	EXPECTED_ISSUER="$$TUNNEL_URL/auth/realms/statistiloto"; \
+	CURRENT_ISSUER=$$(grep 'KEYCLOAK_ISSUER:' docker-compose.ngrok.yml | head -1 | sed 's/.*: *"\(.*\)".*/\1/'); \
+	if [ "$$EXPECTED_ISSUER" != "$$CURRENT_ISSUER" ]; then \
+		echo "[up-ngrok] Updating KEYCLOAK_ISSUER in docker-compose.ngrok.yml:"; \
+		echo "[up-ngrok]   $$CURRENT_ISSUER → $$EXPECTED_ISSUER"; \
+		sed -i "s|KEYCLOAK_ISSUER: .*|KEYCLOAK_ISSUER: \"$$EXPECTED_ISSUER\"|" docker-compose.ngrok.yml; \
+	else \
+		echo "[up-ngrok] KEYCLOAK_ISSUER already matches tunnel URL"; \
+	fi
+	@echo "[up-ngrok] Starting stack with ngrok override..."
 	$(COMPOSE_NGROK) up -d --build
 	@$(MAKE) wait
 
@@ -228,17 +259,44 @@ test-e2e-login:
 
 # ─── Protobuf ───────────────────────────────────────────────────
 
-# Regenerate Go + Java gRPC stubs from proto/lottery.proto
-proto: proto-go proto-java
-	@echo "[proto] Stubs regenerated for both services."
+# Regenerate Go + Java + Python gRPC stubs from proto/lottery.proto
+proto: proto-go proto-java proto-python
+	@echo "[proto] Stubs regenerated for all three services."
 
+# Go stubs: use a minimal protoc builder image (Dockerfile.proto) with the
+# lottery-stats-server source mounted. Much faster than the full builder stage.
 proto-go:
 	@echo "[proto] Regenerating Go stubs..."
-	$(DC) exec lottery make proto
+	docker build -t lottery-proto-builder -f lottery-stats-server/Dockerfile.proto lottery-stats-server/
+	docker run --rm \
+		-v $(PWD)/lottery-stats-server:/app \
+		lottery-proto-builder make proto
 
+# Java stubs: run gradle generateProto in the gradle image with the
+# orchestrator root mounted so ../proto/ resolves correctly.
 proto-java:
 	@echo "[proto] Regenerating Java stubs..."
-	$(DC) exec server ./gradlew generateProto
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-w /workspace/server \
+		gradle:8.10.2-jdk21 \
+		gradle generateProto --no-daemon --no-watch-fs
+
+# Python stubs: use the agent runtime image (has grpc_tools installed).
+# Mount proto/ and agent/app/gen/ so generated files appear on the host.
+proto-python:
+	@echo "[proto] Regenerating Python stubs..."
+	$(COMPOSE) run --rm --no-deps \
+		-v $(PWD)/proto:/tmp/proto \
+		-v $(PWD)/agent/app/gen:/app/app/gen \
+		agent sh -c '\
+			cp /tmp/proto/lottery.proto /app/app/gen/lottery.proto && \
+			python3 -m grpc_tools.protoc \
+				-I/app -I/tmp/proto/third_party \
+				--python_out=/app --grpc_python_out=/app --pyi_out=/app \
+				/app/app/gen/lottery.proto && \
+			rm /app/app/gen/lottery.proto && \
+			touch /app/app/gen/__init__.py'
 
 # ─── Lint ───────────────────────────────────────────────────────
 
@@ -344,7 +402,7 @@ help:
 	@echo "  up                 — build + start detached (active env)"
 	@echo "  up-dev             — build + start dev"
 	@echo "  up-prod            — build + start prod"
-	@echo "  up-ngrok           — build + start with ngrok override (dynamic Keycloak hostname)"
+	@echo "  up-ngrok           — start ngrok tunnel + stack (auto-syncs KEYCLOAK_ISSUER)"
 	@echo "  start              — start without rebuild"
 	@echo "  down               — stop + remove containers"
 	@echo "  stop               — stop containers (keep them)"
@@ -368,9 +426,10 @@ help:
 	@echo "  test-e2e-login     — Playwright login sanity only"
 	@echo ""
 	@echo "PROTO:"
-	@echo "  proto              — regenerate Go + Java stubs"
-	@echo "  proto-go           — regenerate Go stubs"
-	@echo "  proto-java         — regenerate Java stubs"
+	@echo "  proto              — regenerate Go + Java + Python stubs"
+	@echo "  proto-go           — regenerate Go stubs (lottery builder image)"
+	@echo "  proto-java         — regenerate Java stubs (server builder image)"
+	@echo "  proto-python       — regenerate Python stubs (agent runtime image)"
 	@echo ""
 	@echo "LINT:"
 	@echo "  lint               — lint all services"

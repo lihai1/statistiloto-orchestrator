@@ -106,8 +106,11 @@ services:
       DB_SCHEMA: lottery
       AUTH_ENABLED: "true"
       KEYCLOAK_JWKS_URL: http://auth:8080/auth/realms/statistiloto/protocol/openid-connect/certs
-      KEYCLOAK_ISSUER: http://auth:8080/auth/realms/statistiloto
-      KEYCLOAK_AUDIENCE: account
+      # Issuer validation disabled — Keycloak issues tokens with the external-facing
+      # URL (localhost or ngrok host), which varies by deployment. Signature and
+      # audience are still validated against JWKS. Traefik + BFF validate at the edge.
+      KEYCLOAK_ISSUER: ""
+      KEYCLOAK_AUDIENCE: statistiloto-ui
       LOTTERY_SCRAPER_CRON: "0 3 * * *"
       LOTTERY_SEED_ON_BOOT: "true"
     networks:

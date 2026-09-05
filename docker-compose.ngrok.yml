@@ -22,3 +22,10 @@ services:
       # Trust Traefik's X-Forwarded-* headers so Keycloak sees the
       # public ngrok host + https scheme.
       KC_PROXY_HEADERS: xforwarded
+
+  lottery:
+    environment:
+      # Issuer validation — must match the `iss` claim in Keycloak tokens.
+      # With KC_HOSTNAME="" + KC_PROXY_HEADERS=xforwarded, Keycloak issues
+      # tokens with the public ngrok URL as the issuer.
+      KEYCLOAK_ISSUER: "https://cash-spongy-reptilian.ngrok-free.dev/auth/realms/statistiloto"
