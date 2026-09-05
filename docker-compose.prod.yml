@@ -76,6 +76,15 @@ services:
           cpus: "2.0"
           memory: 4G
 
+  # ── Redis: async messaging + pub/sub for agent streaming ──────
+  redis:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
   # ── UI / DB ─────────────────────────────────────────────────────
   ui:
     restart: always

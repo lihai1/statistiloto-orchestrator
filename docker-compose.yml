@@ -140,6 +140,7 @@ services:
       LOTTERY_GRPC_HOST: lottery
       LOTTERY_GRPC_PORT: 9090
       AGENT_READ_TIMEOUT_MS: ${AGENT_READ_TIMEOUT_MS:-300000}
+      REDIS_URL: redis://redis:6379
     networks:
       - statistiloto-net
     depends_on:
@@ -150,6 +151,8 @@ services:
       lottery:
         condition: service_healthy
       agent:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
@@ -184,6 +187,7 @@ services:
       LOTTERY_GRPC_HOST: lottery
       LOTTERY_GRPC_PORT: "9090"
       BFF_BASE_URL: http://server:8082
+      REDIS_URL: redis://redis:6379
     networks:
       - statistiloto-net
     depends_on:
@@ -192,6 +196,8 @@ services:
       auth:
         condition: service_healthy
       lottery:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz || exit 1"]
@@ -233,6 +239,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ── Redis: async messaging + pub/sub for agent streaming ──────
+  redis:
+    image: redis:7.4-alpine
+    container_name: statistiloto-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
+    ports:
+      - "6379"
+    networks:
+      - statistiloto-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # ── Angular PWA (Nginx) — ui-fable build ────────────────────────
   ui:
