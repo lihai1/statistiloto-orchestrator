@@ -71,7 +71,8 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 - **Keycloak** owns identity/authentication data (`keycloak` schema).
 - **Java BFF** owns application data: saved numbers, user profiles, saved
   simulations, feedback (`app` schema). Tables (Flyway-managed):
-  `user_profile`, `saved_numbers`, `saved_simulations` (V3), `feedback` (V4).
+  `user_profile`, `saved_numbers`, `saved_simulations` (V3, +`result_json` V6),
+  `feedback` (V4). All user-owned tables have `archived_at` (V5) for soft-archive.
 - **Go service** owns lottery historical results and computation (`lottery` schema):
   `lottery_results` (including the `prize_amounts` JSONB column populated by the
   prize scraper, used by Simulate for real per-draw prize data).

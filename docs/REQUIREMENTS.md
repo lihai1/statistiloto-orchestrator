@@ -43,10 +43,12 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   (2004-02-12 / today).
 
 - **FR-6b** Save and manage bookmarked Simulate backtest results per user
-  (`/api/user/simulations` CRUD). Each entry stores the original request JSON
-  and the aggregated summary JSON so a saved run can be restored without
-  re-running. Stored in `app.saved_simulations` (Flyway `V3`), scoped to the
-  user's `user_sub`.
+  (`/api/user/simulations` CRUD). Each entry stores the original request JSON,
+  the aggregated summary JSON, and the full result JSON (Flyway `V6` adds
+  `result_json` JSONB) so a saved run can be re-rendered with the same rich
+  results view (sparkline, heatmap, tier table, draw history) as the live
+  Simulate tab without re-running. Stored in `app.saved_simulations` (Flyway
+  `V3` + `V6`), scoped to the user's `user_sub`.
 
 - **FR-6c** Submit user feedback or lottery suggestions (`/api/feedback`).
   Admins list all entries, update status (`new` / `read` / `archived`), and
@@ -317,7 +319,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Schema bootstrap via `db/init-schemas.sh` + `db/init.sql`.
 - Agent schema via `agent/db/init-agent.sql`.
 - `app` schema tables (`user_profile`, `saved_numbers`, `saved_simulations`,
-  `feedback`) are Flyway-managed inside the `server` submodule (V1–V5).
+  `feedback`) are Flyway-managed inside the `server` submodule (V1–V6).
   V5 adds `archived_at` columns for soft-archive on account deletion.
 
 - Persistent volume `postgres_data`.
