@@ -53,8 +53,10 @@ make logs-SERVICE   # tail one service (e.g. make logs-server)
 make test           # all unit/integration tests
 make test-go test-java test-ui test-agent
 make test-e2e       # Playwright (stack must be running)
-make proto          # regenerate Go + Java stubs from proto/
-make proto-go proto-java
+make test-e2e-login # Playwright login sanity only
+make screenshots    # regenerate ui-fable screenshot tour (docs/screenshots/)
+make proto          # regenerate Go + Java + Python stubs from proto/
+make proto-go proto-java proto-python
 make shell-SERVICE  # open shell in a service
 make db-shell       # psql
 make db-backup      # dump to backup.sql
@@ -72,13 +74,18 @@ When changing it:
 
 1. Inspect consumers in `server/` and `lottery-stats-server/` and `agent/`.
 2. Edit `proto/lottery.proto`.
-3. `make proto-go` (regenerates Go stubs in `lottery-stats-server/pkg/gen/`).
-4. `make proto-java` (regenerates Java stubs in `server/build/generated/`).
-5. Agent Python stubs: see `agent/AGENTS.md`.
+3. `make proto-go` (regenerates Go stubs in `lottery-stats-server/pkg/gen/` via
+   a standalone `Dockerfile.proto` builder image).
+4. `make proto-java` (regenerates Java stubs in `server/build/generated/` via
+   `gradle generateProto` in a `gradle:8.10.2-jdk21` container).
+5. `make proto-python` (regenerates Python stubs in `agent/app/gen/` via the
+   agent runtime image which has `grpc_tools` installed).
 6. Update all three implementations.
 7. `make test-go && make test-java && make test-agent`.
 
-Do not duplicate protobuf DTO definitions in any service.
+`make proto` runs steps 3–5 together; each uses a standalone container so the
+full stack does not need to be running. Do not duplicate protobuf DTO
+definitions in any service.
 
 ## Local dev
 
@@ -88,9 +95,12 @@ make up           # dev stack — HTTP on :80 (no TLS needed)
 # open http://localhost/  (dev)
 # For HTTPS/prod: cd proxy && ./generate-cert.sh && cd ..  then  make up-prod
 # open https://localhost/  (accept self-signed cert)
-# For a public ngrok tunnel: run `ngrok http 80` separately, then
-#   make up-ngrok   (docker-compose.ngrok.yml clears KC_HOSTNAME +
-#   sets KC_PROXY_HEADERS=xforwarded so OIDC uses the ngrok host)
+# For a public ngrok tunnel:
+#   make up-ngrok   (auto-starts ngrok http 80 if not running, reads the tunnel
+#   URL from the ngrok API, and syncs KEYCLOAK_ISSUER in
+#   docker-compose.ngrok.yml so the Go service's issuer validation matches the
+#   public host; also clears KC_HOSTNAME + sets KC_PROXY_HEADERS=xforwarded so
+#   OIDC uses the ngrok host)
 ```
 
 Test users (change passwords in production):
@@ -112,9 +122,11 @@ Test users (change passwords in production):
 - `db/init-schemas.sh` runs once on fresh DB only; it is NOT a migration tool.
 - Submodule commits: edit inside the submodule, commit & push there, then `git add <submodule>` in this repo and commit the pointer bump.
 - Traefik ForwardAuth hits `server`'s `/api/auth/verify` — if server is down, all `/api/*` returns 401 even for valid tokens.
+- Go lottery service auth: `KEYCLOAK_ISSUER=""` in `docker-compose.yml` (issuer validation disabled — Keycloak issues tokens with the external-facing URL which varies by deployment; signature + audience `statistiloto-ui` are still validated against JWKS). The ngrok override sets `KEYCLOAK_ISSUER` to the public tunnel URL to restore issuer validation. The agent (`AUDIENCE=statistiloto-ui`) and BFF forward the same JWT.
+- Keycloak Account Console (`/auth/realms/statistiloto/account/`) is admin-only via the `account-admin-only` browser flow (`conditional-user-role` = `ADMIN`). Regular users use the Angular profile page + `/api/user/*`; account deletion is a soft-archive (see `docs/ADR-002-account-soft-archive.md`).
 - WSL: if `docker` fails with permission errors, run once per session: `sudo usermod -aG docker "$(whoami)"` then reopen shell.
 - Prod compose (`docker-compose.prod.yml`) is an *override* on top of `docker-compose.yml`: it enables Traefik TLS on :443 (mounting `proxy/certs` + `traefik.prod.yml`/`dynamic.prod.yml`), switches Keycloak to `start` (prod mode), sets `restart: always`, adds `deploy.resources` limits, disables `LOTTERY_SEED_ON_BOOT`, and tightens the Ollama queue. It does **not** swap in pre-built registry images — `build:` contexts are still inherited from the base file.
-- ngrok compose (`docker-compose.ngrok.yml`) is an *override* on top of `docker-compose.yml`: it clears `KC_HOSTNAME` (so Keycloak uses the request `Host` header dynamically) and sets `KC_PROXY_HEADERS=xforwarded` so OIDC issuer/redirect URLs resolve to the public ngrok host. Run `ngrok http 80` separately — the override does not start the tunnel. Safe because ngrok terminates TLS, so Secure cookies are correct.
+- ngrok compose (`docker-compose.ngrok.yml`) is an *override* on top of `docker-compose.yml`: it clears `KC_HOSTNAME` (so Keycloak uses the request `Host` header dynamically) and sets `KC_PROXY_HEADERS=xforwarded` so OIDC issuer/redirect URLs resolve to the public ngrok host, and sets `KEYCLOAK_ISSUER` on the `lottery` service to the public tunnel URL so the Go service's issuer validation matches. `make up-ngrok` auto-starts `ngrok http 80` on the host if no tunnel is running (log at `/tmp/ngrok.log`), reads the public URL from the ngrok API, and rewrites `KEYCLOAK_ISSUER` in the override file to match. Safe because ngrok terminates TLS, so Secure cookies are correct.
 - The Java BFF schema (`app`) is Flyway-managed inside the `server` submodule. `V2__add_archive_window_to_user_profile.sql` adds `archive_from`/`archive_to` columns to `app.user_profile` (persisted per-user archive date range). `V3__create_saved_simulations.sql` creates `app.saved_simulations` (bookmarked Simulate results per user). `V4__create_feedback.sql` creates `app.feedback` (user feedback + lottery suggestions, admin-managed). Flyway runs on server boot; `db/init-schemas.sh` only creates the schema, not these columns/tables.
 - Redis (`redis:7.4-alpine`) is shared by the Java BFF and the Python agent for async SSE streaming relay (pub/sub channel `agent:stream:{thread_id}`). It holds no persistent application state — `maxmemory 256mb`, `allkeys-lru`, `appendonly no`. Both `server` and `agent` gate startup on `redis: service_healthy`. The agent's `app/redis_client.py` and the BFF's `AgentClientService` degrade gracefully to inline SSE if Redis is unavailable (`REDIS_URL` unset or connection failure).
 

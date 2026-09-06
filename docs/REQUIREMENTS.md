@@ -14,7 +14,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   (tree-based algorithm, frequency-ranked tries, backtracking search).
 
 - **FR-2** Calculate statistics — frequent number pairs/groups over a
-  configurable date range.
+  configurable date range. Response includes `total_draws_in_range` (the
+  number of historical draws in the requested date window).
 
 - **FR-3** Analyze user-selected numbers against historical winning draws,
   returning frequency groups and match details.
@@ -51,6 +52,14 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   Admins list all entries, update status (`new` / `read` / `archived`), and
   delete. Stored in `app.feedback` (Flyway `V4`).
 
+- **FR-6d** Soft-archive account on deletion (`DELETE /api/me`). Sets
+  `archived_at` on the user's profile, saved numbers, saved simulations, and
+  feedback (Flyway `V5`). The Keycloak account is NOT deleted — on re-login,
+  `ensureProfile` reactivates the profile with fresh defaults; old child
+  records stay archived. Admins can view archived data via
+  `GET /api/admin/archived-users` and `GET /api/admin/archived-users/{sub}`.
+  See [ADR-002](ADR-002-account-soft-archive.md).
+
 ### AI Agent
 
 - **FR-7** Chat with an AI assistant (SSE streaming) that can call lottery
@@ -82,6 +91,14 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   `first broker login` flow to prevent account takeover via unverified social
   emails. New social registrations get `USER` role + `/users` + `/unverified`
   groups. See [`auth/README.md`](../auth/README.md) for setup.
+
+- **FR-11b** Keycloak Account Console (`/auth/realms/statistiloto/account/`)
+  is restricted to the `ADMIN` realm role via a custom `account-admin-only`
+  browser flow (`conditional-user-role` authenticator). Regular `USER`/`PAID`
+  accounts cannot reach Keycloak's account-management UI — profile
+  self-service is handled by the Angular profile page + Java BFF
+  (`/api/user/*`). Account deletion is a soft-archive (FR-6d), not a
+  Keycloak hard-delete.
 
 ### Data Freshness
 
@@ -177,7 +194,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   (`AgentClientService`), with inline SSE fallback.
 
 - Owns `app` schema (Flyway): `user_profile`, `saved_numbers`,
-  `saved_simulations` (V3), `feedback` (V4).
+  `saved_simulations` (V3), `feedback` (V4), `archived_at` columns (V5).
 
 - Port 8082.
 
@@ -190,7 +207,10 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   user-supplied overrides).
 
 - Stateless beyond `lottery_results` table.
-- Keycloak JWT validation (defense-in-depth, RS256/JWKS).
+- Keycloak JWT validation (defense-in-depth, RS256/JWKS). Issuer validation
+  disabled in the orchestrator (`KEYCLOAK_ISSUER=""`) — signature and audience
+  (`statistiloto-ui`) are still validated. The ngrok override sets
+  `KEYCLOAK_ISSUER` to the public tunnel URL to restore issuer validation.
 - Scheduled scraper + seeder (draws + prize amounts).
 - Owns `lottery` schema (Liquibase).
 - Ports 8080 (REST gateway), 9090 (gRPC).
@@ -218,7 +238,9 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Tool error propagation via `ToolError` for clean exception typing.
 - Token metering (agent.token_usage).
 - Chat sessions indexed in `agent.chat_sessions` (tier-based retention:
-  free=1, paid=15, admin=unlimited).
+  free=1, paid=15, admin=unlimited). Sessions can be soft-archived
+  (`POST /sessions/archive` sets `archived_at`, deletes checkpointer state);
+  admins view archived sessions via `GET /sessions/archived`.
 
 - gRPC to Go lottery, HTTP to Java BFF.
 - Owns `agent` schema (pgvector).
@@ -228,7 +250,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 
 - OIDC issuer, JWT issuance (RS256).
 - Realm `statistiloto` with clients: `statistiloto-ui` (public, PKCE),
-  `statistiloto-server` (confidential).
+  `statistiloto-server` (confidential), `account` (public, admin-only via
+  custom `account-admin-only` browser flow).
 
 - Roles: USER, PAID, ADMIN.
 - Groups: `/users`, `/admins`, `/paid`, `/unverified`.
@@ -294,7 +317,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Schema bootstrap via `db/init-schemas.sh` + `db/init.sql`.
 - Agent schema via `agent/db/init-agent.sql`.
 - `app` schema tables (`user_profile`, `saved_numbers`, `saved_simulations`,
-  `feedback`) are Flyway-managed inside the `server` submodule (V1–V4).
+  `feedback`) are Flyway-managed inside the `server` submodule (V1–V5).
+  V5 adds `archived_at` columns for soft-archive on account deletion.
 
 - Persistent volume `postgres_data`.
 
@@ -322,7 +346,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
   submodules. Clone with `--recurse-submodules`.
 
 - **Shared proto** — `proto/lottery.proto` is the single source of truth for
-  Java↔Go contracts. No duplicated protobuf definitions.
+  Java↔Go↔Python contracts. No duplicated protobuf definitions. `make proto`
+  regenerates Go + Java + Python stubs (each via a standalone container).
 
 - **Algorithm preservation** — the core lottery-tree algorithm behavior must
   not change unless explicitly required.

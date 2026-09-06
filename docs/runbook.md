@@ -38,19 +38,21 @@ docker compose logs -f
 > then open **<https://localhost/>** and accept the self-signed cert.
 >
 > **Public tunnel (ngrok):** to expose the dev stack over a public HTTPS URL,
-> start a tunnel first (`ngrok http 80`), then bring the stack up with the
-> ngrok override:
+> bring the stack up with the ngrok override:
 >
 > ```bash
 > make up-ngrok   # or: docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d --build
 > ```
 >
-> `docker-compose.ngrok.yml` clears `KC_HOSTNAME` and sets
-> `KC_PROXY_HEADERS=xforwarded` so Keycloak derives its issuer/redirect host
-> dynamically from the public ngrok host (via Traefik's `X-Forwarded-*`
+> `make up-ngrok` auto-starts `ngrok http 80` on the host if no tunnel is
+> running (log at `/tmp/ngrok.log`), reads the public tunnel URL from the ngrok
+> API (`http://localhost:4040/api/tunnels`), and rewrites `KEYCLOAK_ISSUER` in
+> `docker-compose.ngrok.yml` so the Go lottery service's issuer validation
+> matches the actual public host. The override also clears `KC_HOSTNAME` and
+> sets `KC_PROXY_HEADERS=xforwarded` so Keycloak derives its issuer/redirect
+> host dynamically from the public ngrok host (via Traefik's `X-Forwarded-*`
 > headers). The dev realm allows `http://*/*` and `https://*/*` redirect URIs,
-> so no realm edit is needed. The override does **not** start the tunnel — run
-> `ngrok http 80` separately.
+> so no realm edit is needed. A manually started tunnel is detected and reused.
 
 ## Keycloak
 
@@ -191,15 +193,21 @@ make scale-server N=3      # one service to N
   one side, update the other (`AgentClientService` / `app/main.py`).
 
 ### Proto changes
+
 When modifying `proto/lottery.proto` (the single source of truth for the
 Java↔Go contract, also consumed by the agent):
-1. `make proto-go`   — regenerate Go stubs in `lottery-stats-server/pkg/gen/`.
-2. `make proto-java` — regenerate Java stubs in `server/build/generated/`.
-3. Regenerate agent Python stubs (see `agent/AGENTS.md`).
+
+1. `make proto-go`     — regenerate Go stubs in `lottery-stats-server/pkg/gen/`
+   (dedicated `Dockerfile.proto` builder image).
+2. `make proto-java`   — regenerate Java stubs in `server/build/generated/`
+   (`gradle generateProto` in a `gradle:8.10.2-jdk21` container).
+3. `make proto-python` — regenerate Python stubs in `agent/app/gen/`
+   (agent runtime image with `grpc_tools`).
 4. Update all three implementations (`server`, `lottery-stats-server`, `agent`).
 5. `make test-go && make test-java && make test-agent`.
 
-> `make proto` runs steps 1–2 together. Do not duplicate protobuf DTO
+> `make proto` runs steps 1–3 together. Each step uses a standalone container
+> (no need for the full stack to be running). Do not duplicate protobuf DTO
 > definitions in any service.
 
 ## Backup & Recovery

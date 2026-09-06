@@ -43,7 +43,7 @@ APP_SERVICES     := lottery server agent ui
         up up-dev up-prod up-ngrok down down-dev down-prod restart restart-% \
         ps logs logs-% logs-follow \
         health wait \
-        test test-go test-java test-ui test-agent test-e2e \
+        test test-go test-java test-ui test-agent test-e2e test-e2e-login screenshots \
         proto proto-go proto-java proto-python \
         lint lint-go lint-java lint-ui \
         shell-% \
@@ -257,6 +257,15 @@ test-e2e-login:
 	@echo "[test] Playwright login sanity..."
 	cd ui && npx playwright test --grep "login|Login|התחבר"
 
+# Regenerate the ui-fable screenshot tour into docs/screenshots/.
+# Requires the stack to be running (make up && make wait) WITHOUT the
+# ngrok override — the agent chat needs issuer validation disabled so
+# the Go lottery service accepts the BFF's forwarded JWT.
+screenshots:
+	@echo "[screenshots] Regenerating ui-fable screenshot tour..."
+	cd ui-fable && npx playwright test screenshots --reporter=list
+	@echo "[screenshots] Done — see docs/screenshots/"
+
 # ─── Protobuf ───────────────────────────────────────────────────
 
 # Regenerate Go + Java + Python gRPC stubs from proto/lottery.proto
@@ -424,6 +433,7 @@ help:
 	@echo "  test-agent         — Python agent tests"
 	@echo "  test-e2e           — Playwright E2E (stack must be running)"
 	@echo "  test-e2e-login     — Playwright login sanity only"
+	@echo "  screenshots        — regenerate ui-fable screenshot tour (docs/screenshots/)"
 	@echo ""
 	@echo "PROTO:"
 	@echo "  proto              — regenerate Go + Java + Python stubs"

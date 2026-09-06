@@ -23,10 +23,20 @@ replace `https://statistiloto.example.com` with your real production domain
 
 - **Clients**
   - `statistiloto-ui` — public OIDC client used by the Angular PWA
-    (authorization-code + PKCE, no client secret).
+    (authorization-code + PKCE, no client secret). This is the JWT `audience`
+    (`KEYCLOAK_AUDIENCE`) validated by the Go lottery service and the Python
+    agent.
   - `statistiloto-server` — confidential service-account client for the Java
     BFF (machine-to-machine token exchange if needed). Its secret is injected
     from the `STATISTILOTO_SERVER_CLIENT_SECRET` env var.
+  - `account` — public OIDC client for the Keycloak Account Console
+    (`/auth/realms/statistiloto/account/`), bound to a custom browser flow
+    (`account-admin-only`) that requires the `ADMIN` realm role. Non-admin
+    users are rejected at login by a `conditional-user-role` authenticator
+    (`role: ADMIN`), so the Keycloak account-management UI is admin-only.
+    Regular profile self-service is handled by the Angular profile page +
+    Java BFF (`/api/user/*`); account deletion is a soft-archive (see
+    [ADR-002](../docs/ADR-002-account-soft-archive.md)).
 - **Realm roles**: `USER`, `ADMIN`, `PAID`.
 - **Groups**: `/users`, `/admins`, `/paid`, `/unverified`.
   - `defaultGroups: ["/users", "/unverified"]` — all new registrations
@@ -128,6 +138,43 @@ To add Apple Sign In or other providers in the future:
    JAR to `/opt/keycloak/providers` (requires a volume mount and Makefile
    download step). See the extension's compatibility table for the correct
    version for your Keycloak version.
+
+## Admin-only Account Console
+
+The Keycloak Account Console (`/auth/realms/statistiloto/account/`) is
+restricted to the `ADMIN` realm role via a custom browser flow defined in the
+realm JSON. This prevents regular `USER`/`PAID` accounts from reaching
+Keycloak's account-management UI (password change, credentials, sessions) —
+those users manage their profile through the Angular profile page and the
+Java BFF (`/api/user/*`).
+
+### Flow definition
+
+The `account` client binds its `browser` flow to `account-admin-only` via
+`authenticationFlowBindingOverrides`. The flow is defined in the realm's
+`authenticationFlows` array:
+
+- **`account-admin-only`** (top-level `basic-flow`):
+  - `auth-cookie` (ALTERNATIVE) — reuse an existing Keycloak session.
+  - `identity-provider-redirector` (ALTERNATIVE) — social login entry.
+  - `account-admin-only forms` (ALTERNATIVE) — username/password + role check.
+- **`account-admin-only forms`** (sub-flow):
+  - `auth-username-password-form` (REQUIRED) — username + password.
+  - `conditional-user-role` (REQUIRED) — configured by
+    `authenticatorConfig` entry `admin-role-condition`
+    (`negate: false`, `role: ADMIN`).
+
+If the authenticated user lacks the `ADMIN` role, the
+`conditional-user-role` authenticator fails the flow and the user is not
+granted access to the Account Console.
+
+### Modifying the restriction
+
+To allow another role (e.g. `PAID`) to access the Account Console, edit the
+`admin-role-condition` `authenticatorConfig` in both realm JSON files, or
+remove the `authenticationFlowBindingOverrides.browser` binding on the
+`account` client to fall back to Keycloak's default browser flow. Restart the
+`auth` container (or re-import the realm on a fresh DB) to apply.
 
 ## Re-exporting the realm
 

@@ -182,6 +182,106 @@
         "email",
         "roles"
       ]
+    },
+    {
+      "clientId": "account",
+      "name": "Account Console (admin-only)",
+      "description": "Keycloak account console restricted to ADMIN role via custom browser flow.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "rootUrl": "",
+      "baseUrl": "/auth/realms/statistiloto/account/",
+      "redirectUris": [
+        "/auth/realms/statistiloto/account/*"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "authenticationFlowBindingOverrides": {
+        "browser": "account-admin-only"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "account-admin-only",
+      "description": "Browser flow for the account console — requires ADMIN realm role.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "flowAlias": null,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "flowAlias": null,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "flowAlias": "account-admin-only forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "account-admin-only forms",
+      "description": "Username/password + ADMIN role check for account console.",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "flowAlias": null,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "flowAlias": null,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "admin-role-condition"
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "admin-role-condition",
+      "config": {
+        "negate": "false",
+        "role": "ADMIN"
+      }
     }
   ],
   "clientScopes": [

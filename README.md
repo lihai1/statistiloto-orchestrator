@@ -156,19 +156,24 @@ Then open **http://localhost/** (dev stack, HTTP).
 > **edit the placeholder domain before deploying.**
 
 > **Public tunnel (ngrok):** to expose the dev stack over a public HTTPS URL
-> (e.g. for mobile testing or webhook callbacks), start a tunnel first
-> (`ngrok http 80`), then bring the stack up with the ngrok override:
+> (e.g. for mobile testing or webhook callbacks), bring the stack up with the
+> ngrok override:
 >
 > ```bash
 > make up-ngrok   # or: docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d --build
 > ```
 >
-> `docker-compose.ngrok.yml` clears `KC_HOSTNAME` and sets
-> `KC_PROXY_HEADERS=xforwarded` so Keycloak derives its issuer/redirect host
-> dynamically from Traefik's `X-Forwarded-Host`/`X-Forwarded-Proto` headers
-> (the public ngrok host). The dev realm already allows `http://*/*` and
-> `https://*/*` redirect URIs, so no realm edit is needed. Run `ngrok http 80`
-> separately — the override does not start the tunnel.
+> `make up-ngrok` auto-starts `ngrok http 80` on the host if no tunnel is
+> running (log at `/tmp/ngrok.log`), reads the public tunnel URL from the
+> ngrok API (`http://localhost:4040/api/tunnels`), and rewrites
+> `KEYCLOAK_ISSUER` in `docker-compose.ngrok.yml` so the Go lottery service's
+> issuer validation matches the actual public host. `docker-compose.ngrok.yml`
+> also clears `KC_HOSTNAME` and sets `KC_PROXY_HEADERS=xforwarded` so Keycloak
+> derives its issuer/redirect host dynamically from Traefik's
+> `X-Forwarded-Host`/`X-Forwarded-Proto` headers (the public ngrok host). The
+> dev realm already allows `http://*/*` and `https://*/*` redirect URIs, so no
+> realm edit is needed. You may still start `ngrok http 80` manually beforehand
+> — `make up-ngrok` detects an existing tunnel and reuses it.
 
 ### Test Users
 
@@ -222,14 +227,18 @@ git commit -m "bump lottery-stats-server submodule"
 The `proto/lottery.proto` file is the single source of truth for the gRPC contract
 between the Java BFF, the Go lottery service, and the Python agent. When changing it:
 
-1. `make proto-go`   — regenerate Go stubs in `lottery-stats-server/pkg/gen/`.
-2. `make proto-java`  — regenerate Java stubs in `server/build/generated/`.
-3. Regenerate agent Python stubs (see `agent/AGENTS.md`).
+1. `make proto-go`     — regenerate Go stubs in `lottery-stats-server/pkg/gen/`
+   (uses a dedicated `Dockerfile.proto` builder image — no full stack needed).
+2. `make proto-java`   — regenerate Java stubs in `server/build/generated/`
+   (runs `gradle generateProto` in a `gradle:8.10.2-jdk21` container).
+3. `make proto-python` — regenerate Python stubs in `agent/app/gen/`
+   (uses the agent runtime image which has `grpc_tools` installed).
 4. Update all three implementations (`server`, `lottery-stats-server`, `agent`).
 5. `make test-go && make test-java && make test-agent`.
 
-> `make proto` runs steps 1–2 together. Do not duplicate protobuf DTO definitions
-> in any service.
+> `make proto` runs steps 1–3 together. Each step uses a standalone container
+> (no need for the full stack to be running). Do not duplicate protobuf DTO
+> definitions in any service.
 
 ### Scaling
 
@@ -247,7 +256,10 @@ docker compose up --scale server=2 --scale lottery=2
 - [Flows](docs/FLOWS.md) — mermaid diagrams for all major user flows
 - [Runbook](docs/runbook.md) — operations, troubleshooting, backup & recovery
 - [Plan](docs/PLAN.md) — original architecture plan and implementation steps
-- [UI Screenshot Tour](docs/screenshots/SCREENSHOTS.md) — automated Playwright screenshots of every page
+- [Multi-Game Plan](docs/MULTI-GAME-PLAN.md) — domain-corrected production architecture for multi-game support (Lotto/777/123/Chance)
+- [ADR-001](docs/ADR-001-agent-failover-work-claim.md) — agent failover with Redis work-claim, lease, and dedup
+- [ADR-002](docs/ADR-002-account-soft-archive.md) — account soft-archive on deletion with re-registration support
+- [UI Screenshot Tour](docs/screenshots/SCREENSHOTS.md) — automated Playwright screenshots of every ui-fable page (regenerate via `make screenshots`)
 - [Auth README](auth/README.md) — Keycloak realm, custom login theme, social login (Google/Facebook) setup
 
 ## Testing
@@ -268,6 +280,11 @@ make test-agent    # docker compose exec agent make test
 # Playwright E2E (stack must be running)
 make test-e2e      # cd ui && npx playwright test
 make test-e2e-login
+
+# Regenerate the ui-fable screenshot tour into docs/screenshots/
+# (stack must be running WITHOUT the ngrok override — the agent chat
+# needs issuer validation disabled so the Go service accepts the BFF's JWT)
+make screenshots
 ```
 
 ## License

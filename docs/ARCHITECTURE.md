@@ -89,7 +89,13 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 4. Traefik calls `ForwardAuth` to the Java BFF's `/api/auth/verify` for edge validation.
 5. Java validates the JWT against Keycloak JWKS (Spring OAuth2 Resource Server).
 6. Java calls Go via gRPC for computation. Go independently validates the JWT
-   against Keycloak JWKS (defense-in-depth).
+   against Keycloak JWKS (defense-in-depth). Issuer validation is **disabled**
+   on the Go service (`KEYCLOAK_ISSUER=""` in `docker-compose.yml`) because
+   Keycloak issues tokens with the external-facing URL, which varies by
+   deployment (localhost vs. ngrok host vs. prod domain); signature and
+   audience (`statistiloto-ui`) are still validated. Under the ngrok override,
+   `KEYCLOAK_ISSUER` is set to the public tunnel URL so issuer validation is
+   restored.
 7. When the UI calls `/api/agent/*`, the Java BFF forwards the JWT to the
    Python agent, which validates it against Keycloak JWKS independently
    (defense-in-depth) before running the LangGraph supervisor.
@@ -109,6 +115,19 @@ via unverified social emails). New social registrations get the `USER` role
 and the `/users` + `/unverified` groups (via `defaultGroups`). See
 [`auth/README.md`](../auth/README.md) for provider setup and the custom
 `statistiloto` login theme.
+
+### Account Console (admin-only)
+
+The realm defines a public `account` client bound to a custom browser flow
+(`account-admin-only`) that requires the `ADMIN` realm role. Non-admin users
+who reach the Keycloak Account Console (`/auth/realms/statistiloto/account/`)
+are rejected at the login step by a `conditional-user-role` authenticator
+configured with `role: ADMIN`. This keeps the Keycloak account-management UI
+out of reach of regular `USER`/`PAID` accounts — profile self-service for
+those users is handled by the Angular profile page and the Java BFF
+(`/api/user/*`). See [`auth/README.md`](../auth/README.md) for the flow
+definition and the soft-archive behavior that replaces hard account deletion
+([ADR-002](ADR-002-account-soft-archive.md)).
 
 ## Communication
 
