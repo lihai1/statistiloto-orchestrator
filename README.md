@@ -32,7 +32,7 @@ flowchart TB
         Redis[(Redis 7.4<br/>pub/sub streaming relay)]
     end
 
-    Browser -->|HTTP (dev) / HTTPS (prod)| Proxy
+    Browser -->|"HTTP (dev) / HTTPS (prod)"| Proxy
     Proxy -->|/auth/*| Auth
     Proxy -->|/api/*| Server
     Proxy -->|/| UI

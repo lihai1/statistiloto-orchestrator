@@ -182,17 +182,17 @@ flowchart TD
     DB -->|healthy| AUTH
     DB -->|healthy| LOTTERY
     DB -->|healthy| AGENT
+    AUTH -->|healthy| AGENT
+    LOTTERY -->|healthy| AGENT
     REDIS -->|healthy| AGENT
+    DB -->|healthy| SERVER
     AUTH -->|healthy| SERVER
     LOTTERY -->|healthy| SERVER
     AGENT -->|healthy| SERVER
     REDIS -->|healthy| SERVER
-    OLLAMA -.->|runtime only (no startup dep)| AGENT
+    OLLAMA -.->|"runtime only (no startup dep)"| AGENT
 
-    AUTH --> PROXY
-    SERVER --> PROXY
-    AGENT --> PROXY
-    UI --> PROXY
+    UI -->|started| PROXY
 
     style DB fill:#336791,color:#fff
     style AUTH fill:#e87431,color:#fff
@@ -212,7 +212,9 @@ Startup ordering enforced by Compose `depends_on` with `condition: service_healt
    does not gate agent startup on it.
 7. **server** — Java BFF waits for db, auth, lottery, agent, and redis all healthy
 8. **ui** — Independent (static files)
-9. **proxy** — Traefik starts last, depends on auth, server, agent, ui
+9. **proxy** — Traefik depends only on `ui` (started, not healthy). It can
+   start early and routes to backends as they come online — a hard `depends_on`
+   on the auth→agent→server health chain would block proxy startup for 120s+.
 
 ---
 
