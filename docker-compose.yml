@@ -185,7 +185,7 @@ services:
       AUDIENCE: statistiloto-ui
       LLM_PROVIDER: ollama
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen2.5:0.5b
+      OLLAMA_MODEL: dicta-instruct-1.7b
       LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-300}
       LOTTERY_GRPC_HOST: lottery
       LOTTERY_GRPC_PORT: "9090"
@@ -248,7 +248,7 @@ services:
     image: redis:7.4-alpine
     container_name: statistiloto-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
+    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lru --appendonly no
     ports:
       - "6379"
     networks:

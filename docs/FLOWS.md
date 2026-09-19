@@ -120,48 +120,65 @@ sequenceDiagram
 
     U->>P: POST /api/agent/chat/stream { session_id, message }
     P->>J: ForwardAuth + forward
-    J->>A: POST /chat/stream (JWT propagated)
-    A->>A: Validate JWT, extract tier + sub
+    J->>A: POST /chat/stream Accept: application/json (JWT propagated)
+    A->>A: Validate JWT, extract tier + sub; enforce budget
     A->>A: Multi-request check (ask user to pick one if >1 op)
     A->>A: Supervisor routes by intent + tier
-    A-->>J: { thread_id, channel: "agent:stream:{thread_id}" }
-    A->>A: Run graph in background thread
+    A-->>J: { thread_id, channel: "agent:stream:{thread_id}:{run_id}" }
+    A->>A: Run graph as asyncio task (astream)
+    J->>R: XREAD BLOCK from 0-0 on agent:stream:{tid} (replayable)
     A->>DB: RAG query (pgvector, role-scoped)
     DB-->>A: Relevant context
     A->>LLM: Generate response (streaming)
     LLM-->>A: Token stream
 
     loop each graph node
-        A->>R: PUBLISH agent:stream:{tid} { event: "progress", node, label }
-        R->>J: relay
+        A->>R: XADD agent:stream:{tid} { event: "progress", node, label }
+        R-->>J: XREAD result
         J-->>U: SSE: event=progress
     end
+    loop during LLM generation
+        A->>R: XADD { event: "token", delta }
+        R-->>J: XREAD result
+        J-->>U: SSE: event=token
+    end
+    Note over A,J: heartbeat event every ~10s keeps idle watchdog fed
 
-    alt Write tool needed (save_numbers / trigger_scraper)
+    alt Write tool needed (save_numbers / trigger_scraper / edit_file)
         A->>A: interrupt() — HITL pause
-        A->>R: PUBLISH { event: "paused", thread_id }
-        R->>J: relay
-        J-->>U: SSE: event=paused (HITL approval needed)
-        U->>P: POST /api/agent/approve { session_id, approved }
+        A->>R: XADD { event: "paused", thread_id, action: { tool, args, prompt } }
+        R-->>J: XREAD result
+        J-->>U: SSE: event=paused (action card shown)
+        U->>P: POST /api/agent/approve/stream { session_id, approved, edited }
         P->>J: Forward
-        J->>A: POST /approve
+        J->>A: POST /approve/stream
         A->>A: Command(resume=approved)
         A->>G: gRPC tool call (if lottery tool)
         A->>J: HTTP tool call (if save_numbers)
-        A->>R: PUBLISH { event: "progress", ... }
-        R->>J: relay
-        J-->>U: SSE: result
+        A->>R: XADD { event: "progress"/"token", ... }
+        R-->>J: XREAD result
+        J-->>U: SSE: events until done
     end
 
-    A->>R: PUBLISH { event: "done", response, thread_id }
-    R->>J: relay
+    A->>R: XADD { event: "done", response, thread_id }
+    R-->>J: XREAD result
     J-->>U: SSE: event=done (stream complete)
 ```
 
-> When Redis is unavailable, both the agent and the BFF fall back to inline SSE:
-> the BFF reads the agent's `/chat/stream` SSE stream directly and re-emits
-> events. The non-streaming `POST /api/agent/chat` remains as a
-> compatibility/fallback endpoint that returns the final JSON synchronously.
+> Events are appended to the Redis Stream `agent:stream:{thread_id}:{run_id}`
+> (`XADD MAXLEN ~2000`, `EXPIRE 3600`) and read by the BFF with `XREAD` from
+> `0-0`, so events published before the relay starts are replayed rather than
+> lost. Exactly one terminal event (`done`/`error`/`paused`) is emitted per
+> run; the BFF adds an idle watchdog that emits a terminal `error` when no
+> event (including heartbeats) arrives in time.
+>
+> When Redis is unavailable, both the agent and the BFF fall back to inline
+> SSE: the BFF reads the agent's `/chat/stream` SSE stream directly and
+> re-emits events. A JSON-mode (`Accept: application/json`) stream request
+> without Redis returns 503 before any graph work. The non-streaming
+> `POST /api/agent/chat` remains as a compatibility/fallback endpoint that
+> returns the final JSON synchronously, and `POST /api/agent/approve` remains
+> for non-streaming approval.
 
 ---
 

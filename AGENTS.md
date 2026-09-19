@@ -16,16 +16,18 @@ and a Makefile. All application code lives in submodules.
 | `ollama`  | ollama/ollama:0.32.5                    | 11434     | —                       | —                                |
 | `auth`    | keycloak:25.0                           | 8080      | — (realm in `auth/`)    | `keycloak`                       |
 | `db`      | pgvector/pgvector:pg16                  | 5432      | — (init in `db/`)       | shared (4 schemas)               |
-| `redis`   | redis:7.4-alpine                        | 6379      | —                       | — (pub/sub, no persistent state) |
+| `redis`   | redis:7.4-alpine                        | 6379      | —                       | — (stream relay, no persistent state) |
 
 Request flow: Browser → Traefik → (`/` ui, `/api/*` server, `/auth/*` auth).
 The agent is **not** exposed directly by Traefik — the UI reaches it through
 the Java BFF's `/api/agent/*` proxy (HTTP to the agent container on :8000).
 Server → gRPC :9090 → lottery. Agent → gRPC :9090 → lottery, HTTP → ollama,
 HTTP → server (tool calls); Server → HTTP :8000 → agent (chat/approve proxy).
-Agent SSE streaming is relayed through Redis pub/sub: the agent publishes
-events to `agent:stream:{thread_id}` and the Java BFF subscribes and re-emits
-them as SSE (falls back to inline SSE when Redis is unavailable).
+Agent SSE streaming is relayed through Redis Streams: the agent appends events
+to the `agent:stream:{thread_id}:{run_id}` stream (XADD + 1h expiry) and the Java BFF
+replays them via XREAD and re-emits as SSE (falls back to inline SSE when Redis
+is unavailable). Events: `progress`, `token`, `heartbeat`, `paused`, `done`,
+`error` — exactly one terminal event per run.
 
 ## Submodules
 
@@ -128,7 +130,7 @@ Test users (change passwords in production):
 - Prod compose (`docker-compose.prod.yml`) is an *override* on top of `docker-compose.yml`: it enables Traefik TLS on :443 (mounting `proxy/certs` + `traefik.prod.yml`/`dynamic.prod.yml`), switches Keycloak to `start` (prod mode), sets `restart: always`, adds `deploy.resources` limits, disables `LOTTERY_SEED_ON_BOOT`, and tightens the Ollama queue. It does **not** swap in pre-built registry images — `build:` contexts are still inherited from the base file.
 - ngrok compose (`docker-compose.ngrok.yml`) is an *override* on top of `docker-compose.yml`: it clears `KC_HOSTNAME` (so Keycloak uses the request `Host` header dynamically) and sets `KC_PROXY_HEADERS=xforwarded` so OIDC issuer/redirect URLs resolve to the public ngrok host, and sets `KEYCLOAK_ISSUER` on the `lottery` service to the public tunnel URL so the Go service's issuer validation matches. `make up-ngrok` auto-starts `ngrok http 80` on the host if no tunnel is running (log at `/tmp/ngrok.log`), reads the public URL from the ngrok API, and rewrites `KEYCLOAK_ISSUER` in the override file to match. Safe because ngrok terminates TLS, so Secure cookies are correct.
 - The Java BFF schema (`app`) is Flyway-managed inside the `server` submodule. `V2__add_archive_window_to_user_profile.sql` adds `archive_from`/`archive_to` columns to `app.user_profile` (persisted per-user archive date range). `V3__create_saved_simulations.sql` creates `app.saved_simulations` (bookmarked Simulate results per user). `V4__create_feedback.sql` creates `app.feedback` (user feedback + lottery suggestions, admin-managed). `V5__add_archived_at.sql` adds nullable `archived_at` columns + partial indexes to all four user-owned tables (soft-archive support). `V6__add_result_json_to_saved_simulations.sql` adds `result_json` JSONB to `app.saved_simulations` (stores the full SimulateResultResponse for rich re-rendering in the Saved Sims tab). Flyway runs on server boot; `db/init-schemas.sh` only creates the schema, not these columns/tables.
-- Redis (`redis:7.4-alpine`) is shared by the Java BFF and the Python agent for async SSE streaming relay (pub/sub channel `agent:stream:{thread_id}`). It holds no persistent application state — `maxmemory 256mb`, `allkeys-lru`, `appendonly no`. Both `server` and `agent` gate startup on `redis: service_healthy`. The agent's `app/redis_client.py` and the BFF's `AgentClientService` degrade gracefully to inline SSE if Redis is unavailable (`REDIS_URL` unset or connection failure).
+- Redis (`redis:7.4-alpine`) is shared by the Java BFF and the Python agent for async SSE streaming relay (Redis Stream `agent:stream:{thread_id}:{run_id}`). It holds no persistent application state — `maxmemory 256mb`, `volatile-lru` (stream keys carry a 1h TTL so only marked keys are evictable), `appendonly no`. Both `server` and `agent` gate startup on `redis: service_healthy`. The agent's `app/redis_client.py` and the BFF's `AgentClientService` degrade gracefully to inline SSE if Redis is unavailable (`REDIS_URL` unset or connection failure).
 
 ## Verification (full-stack feature)
 

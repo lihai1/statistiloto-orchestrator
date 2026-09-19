@@ -37,10 +37,10 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
                 └────────────────────────┘
 
   Agent SSE streaming relay:
-  ┌──────────┐  publish   ┌──────────┐  subscribe  ┌──────────┐
+  ┌──────────┐   XADD     ┌──────────┐    XREAD    ┌──────────┐
   │  Agent   │──────────▶│  Redis   │───────────▶│ Java BFF │──▶ SSE
-  │ /chat/   │            │ pub/sub  │            │ /api/    │
-  │ stream   │            │ agent:   │            │ agent/   │
+  │ /chat/   │            │ Stream   │  (replay   │ /api/    │
+  │ stream   │            │ agent:   │   from 0-0)│ agent/   │
   └──────────┘            │ stream:* │            │ chat/    │
                           └──────────┘            │ stream   │
                                                   └──────────┘
@@ -59,7 +59,7 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
 | `ollama`  | Ollama 0.32.5             | Local LLM inference (serial)                                                                                                         | 11434 (internal)     |
 | `auth`    | Keycloak 25               | Identity, JWT issuance (`keycloak` schema)                                                                                           | 8080 (internal)      |
 | `db`      | PostgreSQL 16 + pgvector  | Shared instance, four logical schemas                                                                                                | 5432                 |
-| `redis`   | Redis 7.4 (alpine)        | Ephemeral pub/sub relay for agent SSE streaming (`agent:stream:{thread_id}`); no persistent state. `maxmemory 256mb`, `allkeys-lru`. | 6379 (internal)      |
+| `redis`   | Redis 7.4 (alpine)        | Ephemeral Redis Streams relay for agent SSE streaming (`agent:stream:{thread_id}:{run_id}`); no persistent state. `maxmemory 256mb`, `volatile-lru`. | 6379 (internal)      |
 
 > Only `proxy` exposes external ports (80 dev / 443 prod). Every other
 > service is reachable only on the private `statistiloto-net` Docker network.
@@ -78,8 +78,8 @@ reimplementation of the legacy Statistiloto lottery-analysis project.
   prize scraper, used by Simulate for real per-draw prize data).
 - **Python agent** owns LLM telemetry and RAG state (`agent` schema):
   `token_usage`, `audit_log`, `llm_config`, `chat_sessions`, and pgvector `embeddings`.
-- **Redis** holds no persistent application state — only ephemeral pub/sub
-  channels for async agent SSE streaming relay.
+- **Redis** holds no persistent application state — only ephemeral Redis
+  Streams (`agent:stream:{thread_id}:{run_id}`, 1h TTL) for async agent SSE relay.
 - No service shares tables with another. Boundaries are enforced by schema.
 
 ## Authentication Flow

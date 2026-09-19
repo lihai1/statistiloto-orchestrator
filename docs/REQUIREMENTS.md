@@ -67,7 +67,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - **FR-7** Chat with an AI assistant (SSE streaming) that can call lottery
   tools, retrieve RAG context, and trigger writes with human approval (HITL).
   Per-request LLM override (`config_id`) and language hint (`lang`). Streaming
-  is relayed through Redis pub/sub (`agent:stream:{thread_id}`) when available,
+  is relayed through Redis Streams (`agent:stream:{thread_id}:{run_id}`) when available,
   with an inline SSE fallback. Multi-request detection asks the user to pick
   one operation when a message contains multiple distinct operations (with a
   generate-then-save exemption treated as a single workflow).
@@ -159,8 +159,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 
 ### Async Streaming
 
-- **NFR-15** Redis (`redis:7.4-alpine`) provides an ephemeral pub/sub relay for
-  agent SSE streaming (`agent:stream:{thread_id}` channel). `maxmemory 256mb`,
+- **NFR-15** Redis (`redis:7.4-alpine`) provides an ephemeral Redis Streams relay for
+  agent SSE streaming (`agent:stream:{thread_id}:{run_id}` channel). `maxmemory 256mb`,
   `allkeys-lru`, `appendonly no` — no persistent application state. Both the
   agent and the Java BFF gate startup on `redis: service_healthy` and degrade
   gracefully to inline SSE when Redis is unavailable.
@@ -192,7 +192,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - REST API for all UI-facing endpoints.
 - gRPC client to Go lottery service for all computation.
 - HTTP proxy to Agent service for chat/approve (SSE passthrough).
-- Redis pub/sub subscriber for agent SSE streaming relay
+- Redis Streams (XREAD) relay for agent SSE streaming
   (`AgentClientService`), with inline SSE fallback.
 
 - Owns `app` schema (Flyway): `user_profile`, `saved_numbers`,
@@ -283,7 +283,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Local LLM inference. Dev profile: serial (1 parallel request, up to 2 loaded
   models, queue 64). Prod override tightens to 1 loaded model and queue 16.
 
-- Default model used by the agent: `qwen2.5:0.5b`
+- Default model used by the agent: `dicta-instruct-1.7b`
   (`OLLAMA_MODEL` in `docker-compose.yml`); configurable at runtime by admin
   via `/api/agent/llm-config`.
 
@@ -292,8 +292,8 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 
 ### redis (Redis 7.4)
 
-- Ephemeral pub/sub relay for agent SSE streaming
-  (`agent:stream:{thread_id}` channel). No persistent application state.
+- Ephemeral Redis Streams relay for agent SSE streaming
+  (`agent:stream:{thread_id}:{run_id}` channel). No persistent application state.
 
 - `maxmemory 256mb`, `maxmemory-policy allkeys-lru`, `appendonly no`.
 - Shared by the Java BFF (subscriber, via Lettuce) and the Python agent
@@ -326,7 +326,7 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 
 ### Redis
 
-- `redis:7.4-alpine` official image; no persistent volume (ephemeral pub/sub).
+- `redis:7.4-alpine` official image; no persistent volume (ephemeral stream relay).
 - `REDIS_URL=redis://redis:6379` wired into both `server` and `agent`.
 
 ### TLS

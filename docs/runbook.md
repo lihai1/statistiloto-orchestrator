@@ -100,19 +100,21 @@ make db-shell     # or: docker compose exec db psql -U statistiloto -d statistil
 docker compose exec redis redis-cli
 # Check health
 docker compose exec redis redis-cli ping     # PONG
-# Inspect active stream channels
-docker compose exec redis redis-cli PUBSUB CHANNELS "agent:stream:*"
+# Inspect active stream keys (one per run: agent:stream:{thread_id}:{run_id})
+docker compose exec redis redis-cli --scan --pattern "agent:stream:*"
+# Replay a run's events
+docker compose exec redis redis-cli XRANGE "<key>" - +
 # Check memory usage
 docker compose exec redis redis-cli INFO memory | grep used_memory_human
 ```
 
-- Redis is an ephemeral pub/sub relay for agent SSE streaming
-  (`agent:stream:{thread_id}`); it holds no persistent application state.
+- Redis is an ephemeral Redis Streams relay for agent SSE streaming
+  (`agent:stream:{thread_id}:{run_id}`); it holds no persistent application state.
 - Both `server` and `agent` gate startup on `redis: service_healthy`. If Redis
   is down, both services still start and fall back to inline SSE for
   `/api/agent/chat/stream` (the BFF reads the agent's SSE stream directly).
-- `maxmemory 256mb` with `allkeys-lru` eviction — evicted keys are safe
-  (streams are short-lived).
+- `maxmemory 256mb` with `volatile-lru` eviction — stream keys carry a 1h
+  TTL, so only TTL-marked keys are evictable; streams are short-lived anyway.
 
 ## Running Tests
 

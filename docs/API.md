@@ -365,19 +365,22 @@ Response (agent paused for human approval of a write tool):
 ### POST /api/agent/chat/stream
 
 SSE streaming variant of `/api/agent/chat`. Same request body, but the response
-is `text/event-stream`. Two relay paths:
+is `text/event-stream`. The agent picks the transport from the request's
+`Accept` header; the BFF sends `Accept: application/json` when Redis is
+available and `Accept: text/event-stream` otherwise:
 
-- **Redis pub/sub (preferred):** the agent runs the graph in a background
-  thread, publishes progress events to the Redis channel
-  `agent:stream:{thread_id}`, and returns immediately with JSON
-  `{"thread_id": ..., "channel": "agent:stream:..."}`. The Java BFF subscribes
-  to that channel and re-emits each event as an SSE event (event name taken
-  from the JSON `event` field). The emitter does not time out (LLM token
-  streams can be long-running on small local models); a 300s idle watchdog
-  completes the stream with an `error` event if no event arrives.
+- **Redis Streams (preferred):** the agent appends each event to the Redis
+  stream `agent:stream:{thread_id}:{run_id}` (`XADD`, bounded + 1h expiry) and returns
+  immediately with JSON `{"thread_id": ..., "channel": "agent:stream:..."}`.
+  The Java BFF replays the stream with `XREAD` from `0-0` on a dedicated
+  thread, so events published before the relay starts are never lost, and
+  re-emits each event as SSE (event name taken from the JSON `event` field).
+  A ~45s idle watchdog completes the stream with an `error` event if no event
+  or heartbeat arrives; a missing channel also ends with `error`. The BFF
+  never re-POSTs the agent request after a 200.
 - **Inline SSE (fallback):** when Redis is unavailable, the BFF opens a
-  no-read-timeout `HttpClient` connection to the agent's `/chat/stream` and
-  relays SSE events as they arrive.
+  no-read-timeout `HttpClient` connection to the agent's `/chat/stream`
+  (`Accept: text/event-stream`) and relays SSE events as they arrive.
 
 Request body: identical to [`POST /api/agent/chat`](#post-apiagentchat).
 
@@ -385,14 +388,21 @@ SSE event names (the JSON `event` field; relayed as the SSE event name):
 
 | Event `event`   | Payload                                | Description                                                    |
 |-----------------|----------------------------------------|----------------------------------------------------------------|
-| `progress`      | `{ node, label }`                      | Emitted after each graph node completes (incremental).         |
-| `paused`        | `{ thread_id }`                        | Agent paused for HITL approval of a write tool.                |
+| `progress`      | `{ node, label }`                      | Emitted when each graph node starts executing.                 |
+| `token`         | `{ delta }`                            | Streamed LLM answer chunk (user-facing nodes only).            |
+| `heartbeat`     | `{}`                                   | Liveness keepalive (~every 10s); safe to ignore.               |
+| `paused`        | `{ thread_id, action }`                | Agent paused for HITL approval; `action` = `{tool, args, prompt}`. |
 | `done`          | `{ response, thread_id }`              | Stream complete with the final response.                       |
 | `error`         | `{ message }`                          | Error during generation (`{error_type}: {error_msg}`).         |
 
-> When a `paused` event arrives, the UI calls `POST /api/agent/approve` with the
-> same `session_id`; the agent resumes and may open a new stream or return the
-> final result synchronously.
+Exactly one terminal event (`done`, `paused`, or `error`) is emitted per run —
+a client that sees no terminal event after the stream ends should treat the run
+as failed rather than waiting indefinitely.
+
+> When a `paused` event arrives, the UI calls `POST /api/agent/approve/stream`
+> with the same `session_id`; the resumed run streams over the same event
+> contract (`progress`/`token`/terminal). `POST /api/agent/approve` remains
+> available as a synchronous alternative.
 
 ### POST /api/agent/approve
 
@@ -433,7 +443,7 @@ All endpoints below require the `ADMIN` role.
 ```json
 {
   "provider": "ollama",
-  "model": "qwen2.5:0.5b",
+  "model": "dicta-instruct-1.7b",
   "base_url": "http://ollama:11434",
   "api_key": null,
   "request_timeout_seconds": 300
@@ -445,7 +455,7 @@ Response:
 ```json
 {
   "provider": "ollama",
-  "model": "qwen2.5:0.5b",
+  "model": "dicta-instruct-1.7b",
   "base_url": "http://ollama:11434",
   "api_key": null,
   "request_timeout_seconds": 300,
