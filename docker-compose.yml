@@ -113,10 +113,13 @@ services:
       KEYCLOAK_AUDIENCE: statistiloto-ui
       LOTTERY_SCRAPER_CRON: "0 3 * * *"
       LOTTERY_SEED_ON_BOOT: "true"
+      REDIS_URL: redis://redis:6379
     networks:
       - statistiloto-net
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
