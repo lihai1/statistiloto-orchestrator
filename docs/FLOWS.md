@@ -121,8 +121,8 @@ sequenceDiagram
     U->>P: POST /api/agent/chat/stream { session_id, message }
     P->>J: ForwardAuth + forward
     J->>A: POST /chat/stream Accept: application/json (JWT propagated)
-    A->>A: Validate JWT, extract tier + sub; enforce budget
-    A->>A: Multi-request check (ask user to pick one if >1 op)
+    A->>A: Validate JWT, extract tier + sub, enforce budget
+    A->>A: Multi-request check (ask user to pick one if over 1 op)
     A->>A: Supervisor routes by intent + tier
     A-->>J: { thread_id, channel: "agent:stream:{thread_id}:{run_id}" }
     A->>A: Run graph as asyncio task (astream)
@@ -258,13 +258,15 @@ sequenceDiagram
     end
 
     alt Prize backfill (best-effort, non-fatal)
-        G->>DB: GetDrawsWithoutPrizeRefs(limit)
-        DB-->>G: Draw refs missing prize data
-        G->>WEB: HTTP GET per-draw prize page
-        WEB-->>G: HTML prize table
-        G->>DB: UpdatePrizeAmounts(drawNumber, amounts)
-        DB-->>G: Affected draw date
-        G->>G: InvalidateRange(affected dates)
+        loop Until empty / error / 2000-per-run cap
+            G->>DB: GetDrawsWithoutPrizeRefs(50) — only draws pais can serve (draw_number >= 2982, draw_date >= 2018-01-30)
+            DB-->>G: Draw refs missing prize data
+            G->>WEB: HTTP GET per-draw prize page
+            WEB-->>G: HTML prize table
+            G->>DB: UpdatePrizeAmounts(drawNumber, amounts)
+            DB-->>G: Affected draw date
+            G->>G: InvalidateRange(affected dates)
+        end
     end
 
     alt Scraper fails (site down / changed)
@@ -289,8 +291,9 @@ sequenceDiagram
     P->>J: ForwardAuth + forward
     J->>J: Validate JWT, extract user_sub
     J->>G: gRPC Simulate(SimulateRequest)
-    G->>DB: SELECT * FROM lottery.lottery_results WHERE date_range
+    G->>DB: SELECT * FROM lottery.lottery_results WHERE date_range (union of archive_window + simulate_window)
     DB-->>G: Historical draws (incl. prize_amounts)
+    G->>G: Filter loaded draws to simulate_window for backtest
     G->>G: For each draw: enumerate C(N,6) combinations, score tier hits
     G->>G: Use draw.prize_amounts when present (used_real_prizes=true), else defaults/overrides
     G-->>J: SimulateResponse { draws[], summary }

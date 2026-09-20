@@ -437,6 +437,9 @@ All endpoints below require the `ADMIN` role.
 | `/api/agent/token-usage`                             | GET      | Per-user token consumption (from `agent.token_usage`).                                       |
 | `/api/agent/audit-log?limit=50`                      | GET      | Agent action history (from `agent.audit_log`).                                               |
 | `/api/agent/reindex`                                 | POST     | Rebuild the pgvector RAG embeddings.                                                         |
+| `/api/admin/scraper/trigger`                          | POST     | Enqueue a scraper run on the Redis `scraper:requests` stream (consumed by the Go service).   |
+| `/api/admin/scraper/status`                           | GET      | Latest scraper run status (`scraper:status:{requestId}` hash via the `scraper:latest` key).  |
+| `/api/admin/scraper/stream/{requestId}`               | GET      | SSE stream of scraper progress/terminal events (`scraper:events:{requestId}` relay).          |
 
 ### PUT /api/agent/llm-config
 
@@ -464,9 +467,11 @@ Response:
 }
 ```
 
-> The scraper control surface lives in the UI admin section, which triggers
-> the Go scraper through the agent's `trigger_scraper` write tool (HITL-gated)
-> rather than a dedicated BFF REST endpoint.
+> The scraper control surface lives in the UI admin section. It enqueues work
+> via `POST /api/admin/scraper/trigger` (BFF → Redis `scraper:requests` stream →
+> Go `ScraperConsumer`) and follows progress via the status/stream endpoints.
+> The agent's `trigger_scraper` write tool (HITL-gated) remains available as an
+> alternative trigger path.
 
 ## Health & Observability
 
