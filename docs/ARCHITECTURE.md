@@ -134,7 +134,7 @@ definition and the soft-archive behavior that replaces hard account deletion
 
 - **Angular → Java**: REST over HTTP (dev) / HTTPS (prod), through Traefik.
 - **Java → Go**: gRPC (shared `proto/lottery.proto`): GenerateForm, GetStatistics,
-  Analyze, Simulate.
+  Analyze, ScoreForm, Simulate.
 - **Java → Agent**: HTTP (`/api/agent/*` proxy, SSE passthrough for chat).
 - **Agent → Go**: gRPC (shared `proto/lottery.proto`, lottery tools).
 - **Agent → Ollama**: HTTP (local LLM inference).

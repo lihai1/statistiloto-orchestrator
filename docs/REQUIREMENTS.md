@@ -20,6 +20,10 @@ Derived from [PLAN.md](PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - **FR-3** Analyze user-selected numbers against historical winning draws,
   returning frequency groups and match details.
 
+- **FR-3a** Score a user-selected form — absolute pair-heat index vs. the
+  random expectation over the archive window (100 = average; descriptive,
+  not predictive). Exposed as `POST /api/generate/score` → gRPC `ScoreForm`.
+
 - **FR-4** Generate "lucky" numbers (willBe front-loading via ReGroup).
 - **FR-4a** Simulate (backtest) a user's ticket against every historical draw in
   an archive window. Supports systematic forms (6, 8, 10, 12 numbers) where all

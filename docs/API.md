@@ -58,6 +58,7 @@ Response: identical to [`GET /api/me`](#get-apime) with the updated window.
 | `/api/generate/form`          | POST     | Yes    | Generate lottery number combinations.            |
 | `/api/generate/statistics`    | POST     | Yes    | Calculate frequent pairs/groups.                 |
 | `/api/generate/analyze`       | POST     | Yes    | Analyze user-selected numbers.                   |
+| `/api/generate/score`         | POST     | Yes    | Pair-heat index for a form (100 = random average). |
 | `/api/generate/simulate`      | POST     | Yes    | Backtest a ticket against historical draws.      |
 
 ### POST /api/generate/form
@@ -119,6 +120,33 @@ Response:
   "matches": [
     { "drawId": "1234", "drawDate": "2024-03-15", "matchedNumbers": [1, 2, 3], "matchCount": 3 }
   ]
+}
+```
+
+### POST /api/generate/score
+
+Absolute pair-heat index for a form over the archive window — observed pair
+co-occurrences vs. the random expectation (×100). `100` means the set's pair
+frequency equals the random average; above/below is historically above/below
+expected. Descriptive, not predictive. `form` requires at least 2 numbers.
+
+```json
+{
+  "form": [1, 2, 3, 4, 5, 6],
+  "from": "2024-01-01",
+  "to": "2024-12-31"
+}
+```
+
+Response:
+
+```json
+{
+  "heat": 103.69,
+  "observedPairHits": 880,
+  "expectedPairHits": 848.65,
+  "draws": 2512,
+  "pairCount": 15
 }
 ```
 
